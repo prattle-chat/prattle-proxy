@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/prattle-chat/prattle-proxy/server";
+
+
+// Proxy handles the proxying and routing of chat messages between parties
+// including to parties on other prattle servers.
+//
+// Authentication is done through bearer tokens, which are time-limited and
+// minted through calls to Proxy.Token.
+//
+// IDs are minted through a two part call to 'Proxy.Signup' and 'Proxy.Finalise'
+// which mint an ID and an OTP seed (before validating that seed in Finalise)
+//
+// A user subscribes to a proxy instance via Proxy.Subscribe by authenticating
+// with their bearer token. This token is used to retrieve a user's ID
+service Proxy {
+  // Signup accepts a new password and mints a new ID and OTP seed
+  rpc Signup(SignupRequest) returns (SignupResponse) {}
+
+  // Finalise is used to finalise the signup flow, which it does by accepting
+  // the minted ID and a valid OTP value.
+  //
+  // This call will return an error or nothing
+  rpc Finalise(OTPAndKey) returns (google.protobuf.Empty) {}
+
+  // Token accepts a password and a valid OTP value, returning a new bearer
+  // token which can be used in Subscribing to message stream
+  rpc Token(OTPAndKey) returns (OTPAndKey) {}
+
+  // AddPublicKey adds a new public key for a user. A user can have up to n public
+  // keys, where n is configured on the proxy.
+  //
+  // Where n is too few, a user is limited by the number of clients they can connect
+  // with.
+  // Where n is too high, the cost of sending a user a message becomes high, as does
+  // receiving _for_ that user
+  rpc AddPublicKey(OTPAndKey) returns (google.protobuf.Empty) {}
+
+  // Subscribe is used to provide a stream to receive a user's messages
+  rpc Subscribe(google.protobuf.Empty) returns (stream MessageWrapper) {}
+
+  // PublicKey retrieves the public key of a user, handling cases where a key
+  // lives on a third-party proxy instance
+  rpc PublicKey(OTPAndKey) returns (OTPAndKey) {}
+
+  // Send accepts an encoded/ wrapped message and sends it to a user
+  rpc Send(MessageWrapper) returns (google.protobuf.Empty) {}
+}
+
+
+// SignupRequest contains a password to be used during Signup
+//
+// This message could be merged with OTPAndKey, but it makes a certain
+// amount of sense to keep this small, explicit, and less complex by
+// making it only used in a single place
+message SignupRequest {
+  string password = 2;
+}
+
+// SignupResponse contains the information necessary to connect to a Proxy;
+// namely: the user's new ID (including domain name information), and a
+// value which can seed an OTP app/authenticator/etc. to act as a password.
+message SignupResponse {
+  string id = 1;
+  int64 seed = 2;
+}
+
+// OTPAndKey encapsulates an OTP value and a key.
+// It is used:
+//
+//   1. On finalise: where value is a valid OTP value, and key is a user ID
+//   2. On token request: where value is a valid OTP value, and key is password
+//   3. On returning a minted token (as a response from above): where value is empty,
+//      and key is a token to auth with
+//   4. On looking up a public key: where key is a user key
+message OTPAndKey {
+  int64 value = 1;
+  string key = 2;
+}
+
+// MessageWrappper wraps an encoded/ encrypted message to be forwarded to a recipient
+//
+// Encoded is expected to be formed by taking a 'Message' and encypting it with the
+// recipient's public key. Because of this, that message is where all of the important
+// and useful metadatas are stored, such as sender
+message MessageWrapper {
+  string recipient = 1;
+  bytes encoded = 2;
+}
+
+message Message {
+  // recipient in this context is used to determine whether a message was sent to a
+  // user directly, or to a group
+  string recipient = 1;
+  string sender = 2;
+  google.protobuf.Timestamp datetime = 3;
+}
+
+/*
+
+  Signup flow:
+  1. Send a request to 'Proxy.Signup' containing a password, returning a seed for OTP and a new ID
+  2. Send a request to 'Proxy.Finalise' containing an OTP
+
+  Login flow:
+  1. Send a request to 'Proxy.Token' containing an OTP and a password, receiving a token (these are valid for a set period of time before re-negotiation is needed)
+  2. This request should block for an amount of time in the expectation that this will slow down/ discourage attackers
+  3. On many failures, block login for an amount of time
+
+
+ */
