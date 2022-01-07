@@ -48,6 +48,22 @@ type ProxyClient interface {
 	PublicKey(ctx context.Context, in *Auth, opts ...grpc.CallOption) (Proxy_PublicKeyClient, error)
 	// Send accepts an encoded/ wrapped message and sends it to a user
 	Send(ctx context.Context, in *MessageWrapper, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// CreateGroup will create a group, setting the calling user as owner
+	CreateGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error)
+	// JoinGroup will join the calling user to a group, so long as that
+	// group is set to Open
+	JoinGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// Group returns information about a group, such as owners and members
+	GroupInfo(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error)
+	// InviteToGroup allows group owners to invite users to a group
+	InviteToGroup(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// PromoteUser allows a group owner to make another user an owner
+	PromoteUser(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// DemoteUser allows a group owner to demote another owner to
+	// regular user, or to boot a regular user from the group
+	DemoteUser(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// LeaveGroup allows a user to leave a group
+	LeaveGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type proxyClient struct {
@@ -167,6 +183,69 @@ func (c *proxyClient) Send(ctx context.Context, in *MessageWrapper, opts ...grpc
 	return out, nil
 }
 
+func (c *proxyClient) CreateGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error) {
+	out := new(Group)
+	err := c.cc.Invoke(ctx, "/Proxy/CreateGroup", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *proxyClient) JoinGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/Proxy/JoinGroup", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *proxyClient) GroupInfo(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error) {
+	out := new(Group)
+	err := c.cc.Invoke(ctx, "/Proxy/GroupInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *proxyClient) InviteToGroup(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/Proxy/InviteToGroup", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *proxyClient) PromoteUser(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/Proxy/PromoteUser", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *proxyClient) DemoteUser(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/Proxy/DemoteUser", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *proxyClient) LeaveGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/Proxy/LeaveGroup", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProxyServer is the server API for Proxy service.
 // All implementations must embed UnimplementedProxyServer
 // for forward compatibility
@@ -196,6 +275,22 @@ type ProxyServer interface {
 	PublicKey(*Auth, Proxy_PublicKeyServer) error
 	// Send accepts an encoded/ wrapped message and sends it to a user
 	Send(context.Context, *MessageWrapper) (*emptypb.Empty, error)
+	// CreateGroup will create a group, setting the calling user as owner
+	CreateGroup(context.Context, *Group) (*Group, error)
+	// JoinGroup will join the calling user to a group, so long as that
+	// group is set to Open
+	JoinGroup(context.Context, *Group) (*emptypb.Empty, error)
+	// Group returns information about a group, such as owners and members
+	GroupInfo(context.Context, *Group) (*Group, error)
+	// InviteToGroup allows group owners to invite users to a group
+	InviteToGroup(context.Context, *GroupUser) (*emptypb.Empty, error)
+	// PromoteUser allows a group owner to make another user an owner
+	PromoteUser(context.Context, *GroupUser) (*emptypb.Empty, error)
+	// DemoteUser allows a group owner to demote another owner to
+	// regular user, or to boot a regular user from the group
+	DemoteUser(context.Context, *GroupUser) (*emptypb.Empty, error)
+	// LeaveGroup allows a user to leave a group
+	LeaveGroup(context.Context, *Group) (*emptypb.Empty, error)
 	mustEmbedUnimplementedProxyServer()
 }
 
@@ -223,6 +318,27 @@ func (UnimplementedProxyServer) PublicKey(*Auth, Proxy_PublicKeyServer) error {
 }
 func (UnimplementedProxyServer) Send(context.Context, *MessageWrapper) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Send not implemented")
+}
+func (UnimplementedProxyServer) CreateGroup(context.Context, *Group) (*Group, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateGroup not implemented")
+}
+func (UnimplementedProxyServer) JoinGroup(context.Context, *Group) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method JoinGroup not implemented")
+}
+func (UnimplementedProxyServer) GroupInfo(context.Context, *Group) (*Group, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GroupInfo not implemented")
+}
+func (UnimplementedProxyServer) InviteToGroup(context.Context, *GroupUser) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InviteToGroup not implemented")
+}
+func (UnimplementedProxyServer) PromoteUser(context.Context, *GroupUser) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PromoteUser not implemented")
+}
+func (UnimplementedProxyServer) DemoteUser(context.Context, *GroupUser) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DemoteUser not implemented")
+}
+func (UnimplementedProxyServer) LeaveGroup(context.Context, *Group) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LeaveGroup not implemented")
 }
 func (UnimplementedProxyServer) mustEmbedUnimplementedProxyServer() {}
 
@@ -369,6 +485,132 @@ func _Proxy_Send_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Proxy_CreateGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Group)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyServer).CreateGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Proxy/CreateGroup",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyServer).CreateGroup(ctx, req.(*Group))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Proxy_JoinGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Group)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyServer).JoinGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Proxy/JoinGroup",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyServer).JoinGroup(ctx, req.(*Group))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Proxy_GroupInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Group)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyServer).GroupInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Proxy/GroupInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyServer).GroupInfo(ctx, req.(*Group))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Proxy_InviteToGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GroupUser)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyServer).InviteToGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Proxy/InviteToGroup",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyServer).InviteToGroup(ctx, req.(*GroupUser))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Proxy_PromoteUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GroupUser)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyServer).PromoteUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Proxy/PromoteUser",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyServer).PromoteUser(ctx, req.(*GroupUser))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Proxy_DemoteUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GroupUser)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyServer).DemoteUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Proxy/DemoteUser",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyServer).DemoteUser(ctx, req.(*GroupUser))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Proxy_LeaveGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Group)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProxyServer).LeaveGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Proxy/LeaveGroup",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProxyServer).LeaveGroup(ctx, req.(*Group))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Proxy_ServiceDesc is the grpc.ServiceDesc for Proxy service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -395,6 +637,34 @@ var Proxy_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Send",
 			Handler:    _Proxy_Send_Handler,
+		},
+		{
+			MethodName: "CreateGroup",
+			Handler:    _Proxy_CreateGroup_Handler,
+		},
+		{
+			MethodName: "JoinGroup",
+			Handler:    _Proxy_JoinGroup_Handler,
+		},
+		{
+			MethodName: "GroupInfo",
+			Handler:    _Proxy_GroupInfo_Handler,
+		},
+		{
+			MethodName: "InviteToGroup",
+			Handler:    _Proxy_InviteToGroup_Handler,
+		},
+		{
+			MethodName: "PromoteUser",
+			Handler:    _Proxy_PromoteUser_Handler,
+		},
+		{
+			MethodName: "DemoteUser",
+			Handler:    _Proxy_DemoteUser_Handler,
+		},
+		{
+			MethodName: "LeaveGroup",
+			Handler:    _Proxy_LeaveGroup_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
