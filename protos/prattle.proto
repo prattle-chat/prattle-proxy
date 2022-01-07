@@ -113,6 +113,7 @@ message Message {
   string recipient = 1;
   string sender = 2;
   google.protobuf.Timestamp datetime = 3;
+  bytes body = 4;
 }
 
 /*
