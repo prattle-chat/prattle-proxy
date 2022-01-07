@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 
 	"github.com/prattle-chat/prattle-proxy/server"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -15,8 +14,6 @@ func (s Server) Subscribe(_ *emptypb.Empty, ss server.Proxy_SubscribeServer) (er
 	}
 
 	for m := range s.redis.Messages(u.Id) {
-		log.Printf("%#v", m)
-
 		ss.Send(&server.MessageWrapper{
 			Encoded: []byte(m.Payload),
 		})
