@@ -25,11 +25,11 @@ service Proxy {
   // the minted ID and a valid OTP value.
   //
   // This call will return an error or nothing
-  rpc Finalise(OTPAndKey) returns (google.protobuf.Empty) {}
+  rpc Finalise(Auth) returns (google.protobuf.Empty) {}
 
   // Token accepts a password and a valid OTP value, returning a new bearer
   // token which can be used in Subscribing to message stream
-  rpc Token(OTPAndKey) returns (OTPAndKey) {}
+  rpc Token(Auth) returns (TokenValue) {}
 
   // AddPublicKey adds a new public key for a user. A user can have up to n public
   // keys, where n is configured on the proxy.
@@ -38,14 +38,14 @@ service Proxy {
   // with.
   // Where n is too high, the cost of sending a user a message becomes high, as does
   // receiving _for_ that user
-  rpc AddPublicKey(OTPAndKey) returns (google.protobuf.Empty) {}
+  rpc AddPublicKey(PublicKeyValue) returns (google.protobuf.Empty) {}
 
   // Subscribe is used to provide a stream to receive a user's messages
   rpc Subscribe(google.protobuf.Empty) returns (stream MessageWrapper) {}
 
-  // PublicKey retrieves the public key of a user, handling cases where a key
+  // PublicKey retrieves the public keys of a user, handling cases where a key
   // lives on a third-party proxy instance
-  rpc PublicKey(OTPAndKey) returns (OTPAndKey) {}
+  rpc PublicKey(Auth) returns (stream PublicKeyValue) {}
 
   // Send accepts an encoded/ wrapped message and sends it to a user
   rpc Send(MessageWrapper) returns (google.protobuf.Empty) {}
@@ -58,28 +58,43 @@ service Proxy {
 // amount of sense to keep this small, explicit, and less complex by
 // making it only used in a single place
 message SignupRequest {
-  string password = 2;
+  string password = 1;
 }
 
 // SignupResponse contains the information necessary to connect to a Proxy;
 // namely: the user's new ID (including domain name information), and a
 // value which can seed an OTP app/authenticator/etc. to act as a password.
 message SignupResponse {
-  string id = 1;
-  int64 seed = 2;
+  string user_id = 1;
+  string totp_seed = 2;
 }
 
-// OTPAndKey encapsulates an OTP value and a key.
-// It is used:
+// Auth encapsulates the information necessary to authenticate,
+// specifically:
 //
-//   1. On finalise: where value is a valid OTP value, and key is a user ID
-//   2. On token request: where value is a valid OTP value, and key is password
-//   3. On returning a minted token (as a response from above): where value is empty,
-//      and key is a token to auth with
-//   4. On looking up a public key: where key is a user key
-message OTPAndKey {
-  int64 value = 1;
-  string key = 2;
+//   1. User ID
+//   2. Password
+//   3. TOTP value
+//
+// and is used in a number of places:
+//
+//   1. To finalise signup; and
+//   2. To receive a new session token
+message Auth {
+  string user_id = 1;
+  string password = 2;
+  int64 totp = 3;
+}
+
+// PublicKey contains data associated with Public Keys
+message PublicKeyValue {
+  string value = 1;
+}
+
+// Token contains a session token, used during Subscribe, Send,
+// and public key operations
+message TokenValue {
+  string value = 1;
 }
 
 // MessageWrappper wraps an encoded/ encrypted message to be forwarded to a recipient

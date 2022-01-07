@@ -29,10 +29,10 @@ type ProxyClient interface {
 	// the minted ID and a valid OTP value.
 	//
 	// This call will return an error or nothing
-	Finalise(ctx context.Context, in *OTPAndKey, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	Finalise(ctx context.Context, in *Auth, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// Token accepts a password and a valid OTP value, returning a new bearer
 	// token which can be used in Subscribing to message stream
-	Token(ctx context.Context, in *OTPAndKey, opts ...grpc.CallOption) (*OTPAndKey, error)
+	Token(ctx context.Context, in *Auth, opts ...grpc.CallOption) (*TokenValue, error)
 	// AddPublicKey adds a new public key for a user. A user can have up to n public
 	// keys, where n is configured on the proxy.
 	//
@@ -40,12 +40,12 @@ type ProxyClient interface {
 	// with.
 	// Where n is too high, the cost of sending a user a message becomes high, as does
 	// receiving _for_ that user
-	AddPublicKey(ctx context.Context, in *OTPAndKey, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	AddPublicKey(ctx context.Context, in *PublicKeyValue, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// Subscribe is used to provide a stream to receive a user's messages
 	Subscribe(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (Proxy_SubscribeClient, error)
-	// PublicKey retrieves the public key of a user, handling cases where a key
+	// PublicKey retrieves the public keys of a user, handling cases where a key
 	// lives on a third-party proxy instance
-	PublicKey(ctx context.Context, in *OTPAndKey, opts ...grpc.CallOption) (*OTPAndKey, error)
+	PublicKey(ctx context.Context, in *Auth, opts ...grpc.CallOption) (Proxy_PublicKeyClient, error)
 	// Send accepts an encoded/ wrapped message and sends it to a user
 	Send(ctx context.Context, in *MessageWrapper, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
@@ -67,7 +67,7 @@ func (c *proxyClient) Signup(ctx context.Context, in *SignupRequest, opts ...grp
 	return out, nil
 }
 
-func (c *proxyClient) Finalise(ctx context.Context, in *OTPAndKey, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *proxyClient) Finalise(ctx context.Context, in *Auth, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, "/Proxy/Finalise", in, out, opts...)
 	if err != nil {
@@ -76,8 +76,8 @@ func (c *proxyClient) Finalise(ctx context.Context, in *OTPAndKey, opts ...grpc.
 	return out, nil
 }
 
-func (c *proxyClient) Token(ctx context.Context, in *OTPAndKey, opts ...grpc.CallOption) (*OTPAndKey, error) {
-	out := new(OTPAndKey)
+func (c *proxyClient) Token(ctx context.Context, in *Auth, opts ...grpc.CallOption) (*TokenValue, error) {
+	out := new(TokenValue)
 	err := c.cc.Invoke(ctx, "/Proxy/Token", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func (c *proxyClient) Token(ctx context.Context, in *OTPAndKey, opts ...grpc.Cal
 	return out, nil
 }
 
-func (c *proxyClient) AddPublicKey(ctx context.Context, in *OTPAndKey, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *proxyClient) AddPublicKey(ctx context.Context, in *PublicKeyValue, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, "/Proxy/AddPublicKey", in, out, opts...)
 	if err != nil {
@@ -126,13 +126,36 @@ func (x *proxySubscribeClient) Recv() (*MessageWrapper, error) {
 	return m, nil
 }
 
-func (c *proxyClient) PublicKey(ctx context.Context, in *OTPAndKey, opts ...grpc.CallOption) (*OTPAndKey, error) {
-	out := new(OTPAndKey)
-	err := c.cc.Invoke(ctx, "/Proxy/PublicKey", in, out, opts...)
+func (c *proxyClient) PublicKey(ctx context.Context, in *Auth, opts ...grpc.CallOption) (Proxy_PublicKeyClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Proxy_ServiceDesc.Streams[1], "/Proxy/PublicKey", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &proxyPublicKeyClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Proxy_PublicKeyClient interface {
+	Recv() (*PublicKeyValue, error)
+	grpc.ClientStream
+}
+
+type proxyPublicKeyClient struct {
+	grpc.ClientStream
+}
+
+func (x *proxyPublicKeyClient) Recv() (*PublicKeyValue, error) {
+	m := new(PublicKeyValue)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *proxyClient) Send(ctx context.Context, in *MessageWrapper, opts ...grpc.CallOption) (*emptypb.Empty, error) {
@@ -154,10 +177,10 @@ type ProxyServer interface {
 	// the minted ID and a valid OTP value.
 	//
 	// This call will return an error or nothing
-	Finalise(context.Context, *OTPAndKey) (*emptypb.Empty, error)
+	Finalise(context.Context, *Auth) (*emptypb.Empty, error)
 	// Token accepts a password and a valid OTP value, returning a new bearer
 	// token which can be used in Subscribing to message stream
-	Token(context.Context, *OTPAndKey) (*OTPAndKey, error)
+	Token(context.Context, *Auth) (*TokenValue, error)
 	// AddPublicKey adds a new public key for a user. A user can have up to n public
 	// keys, where n is configured on the proxy.
 	//
@@ -165,12 +188,12 @@ type ProxyServer interface {
 	// with.
 	// Where n is too high, the cost of sending a user a message becomes high, as does
 	// receiving _for_ that user
-	AddPublicKey(context.Context, *OTPAndKey) (*emptypb.Empty, error)
+	AddPublicKey(context.Context, *PublicKeyValue) (*emptypb.Empty, error)
 	// Subscribe is used to provide a stream to receive a user's messages
 	Subscribe(*emptypb.Empty, Proxy_SubscribeServer) error
-	// PublicKey retrieves the public key of a user, handling cases where a key
+	// PublicKey retrieves the public keys of a user, handling cases where a key
 	// lives on a third-party proxy instance
-	PublicKey(context.Context, *OTPAndKey) (*OTPAndKey, error)
+	PublicKey(*Auth, Proxy_PublicKeyServer) error
 	// Send accepts an encoded/ wrapped message and sends it to a user
 	Send(context.Context, *MessageWrapper) (*emptypb.Empty, error)
 	mustEmbedUnimplementedProxyServer()
@@ -183,20 +206,20 @@ type UnimplementedProxyServer struct {
 func (UnimplementedProxyServer) Signup(context.Context, *SignupRequest) (*SignupResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Signup not implemented")
 }
-func (UnimplementedProxyServer) Finalise(context.Context, *OTPAndKey) (*emptypb.Empty, error) {
+func (UnimplementedProxyServer) Finalise(context.Context, *Auth) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Finalise not implemented")
 }
-func (UnimplementedProxyServer) Token(context.Context, *OTPAndKey) (*OTPAndKey, error) {
+func (UnimplementedProxyServer) Token(context.Context, *Auth) (*TokenValue, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Token not implemented")
 }
-func (UnimplementedProxyServer) AddPublicKey(context.Context, *OTPAndKey) (*emptypb.Empty, error) {
+func (UnimplementedProxyServer) AddPublicKey(context.Context, *PublicKeyValue) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddPublicKey not implemented")
 }
 func (UnimplementedProxyServer) Subscribe(*emptypb.Empty, Proxy_SubscribeServer) error {
 	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
-func (UnimplementedProxyServer) PublicKey(context.Context, *OTPAndKey) (*OTPAndKey, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PublicKey not implemented")
+func (UnimplementedProxyServer) PublicKey(*Auth, Proxy_PublicKeyServer) error {
+	return status.Errorf(codes.Unimplemented, "method PublicKey not implemented")
 }
 func (UnimplementedProxyServer) Send(context.Context, *MessageWrapper) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Send not implemented")
@@ -233,7 +256,7 @@ func _Proxy_Signup_Handler(srv interface{}, ctx context.Context, dec func(interf
 }
 
 func _Proxy_Finalise_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OTPAndKey)
+	in := new(Auth)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -245,13 +268,13 @@ func _Proxy_Finalise_Handler(srv interface{}, ctx context.Context, dec func(inte
 		FullMethod: "/Proxy/Finalise",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProxyServer).Finalise(ctx, req.(*OTPAndKey))
+		return srv.(ProxyServer).Finalise(ctx, req.(*Auth))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Proxy_Token_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OTPAndKey)
+	in := new(Auth)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -263,13 +286,13 @@ func _Proxy_Token_Handler(srv interface{}, ctx context.Context, dec func(interfa
 		FullMethod: "/Proxy/Token",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProxyServer).Token(ctx, req.(*OTPAndKey))
+		return srv.(ProxyServer).Token(ctx, req.(*Auth))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Proxy_AddPublicKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OTPAndKey)
+	in := new(PublicKeyValue)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -281,7 +304,7 @@ func _Proxy_AddPublicKey_Handler(srv interface{}, ctx context.Context, dec func(
 		FullMethod: "/Proxy/AddPublicKey",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProxyServer).AddPublicKey(ctx, req.(*OTPAndKey))
+		return srv.(ProxyServer).AddPublicKey(ctx, req.(*PublicKeyValue))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -307,22 +330,25 @@ func (x *proxySubscribeServer) Send(m *MessageWrapper) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Proxy_PublicKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OTPAndKey)
-	if err := dec(in); err != nil {
-		return nil, err
+func _Proxy_PublicKey_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Auth)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(ProxyServer).PublicKey(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/Proxy/PublicKey",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProxyServer).PublicKey(ctx, req.(*OTPAndKey))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(ProxyServer).PublicKey(m, &proxyPublicKeyServer{stream})
+}
+
+type Proxy_PublicKeyServer interface {
+	Send(*PublicKeyValue) error
+	grpc.ServerStream
+}
+
+type proxyPublicKeyServer struct {
+	grpc.ServerStream
+}
+
+func (x *proxyPublicKeyServer) Send(m *PublicKeyValue) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _Proxy_Send_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -367,10 +393,6 @@ var Proxy_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Proxy_AddPublicKey_Handler,
 		},
 		{
-			MethodName: "PublicKey",
-			Handler:    _Proxy_PublicKey_Handler,
-		},
-		{
 			MethodName: "Send",
 			Handler:    _Proxy_Send_Handler,
 		},
@@ -379,6 +401,11 @@ var Proxy_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "Subscribe",
 			Handler:       _Proxy_Subscribe_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "PublicKey",
+			Handler:       _Proxy_PublicKey_Handler,
 			ServerStreams: true,
 		},
 	},
