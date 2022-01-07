@@ -83,7 +83,7 @@ message SignupResponse {
 message Auth {
   string user_id = 1;
   string password = 2;
-  int64 totp = 3;
+  string totp = 3;
 }
 
 // PublicKey contains data associated with Public Keys

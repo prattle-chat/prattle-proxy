@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"strconv"
 
 	"github.com/alexedwards/argon2id"
 	"github.com/gofrs/uuid"
@@ -76,13 +75,13 @@ func (s Server) mintToken() string {
 	)
 }
 
-func (s Server) validateTOTP(user string, token int64) (valid bool, err error) {
+func (s Server) validateTOTP(user string, token string) (valid bool, err error) {
 	seed, err := s.redis.GetTOTPSeed(user)
 	if err != nil {
 		return
 	}
 
-	valid = totp.Validate(strconv.FormatInt(token, 10), seed)
+	valid = totp.Validate(token, seed)
 
 	return
 }

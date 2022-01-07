@@ -81,7 +81,7 @@ func (s Server) Token(ctx context.Context, in *server.Auth) (out *server.TokenVa
 }
 
 func (s Server) validateAuth(in *server.Auth) (err error) {
-	if in == nil || in.UserId == "" || in.Password == "" || in.Totp == 0 {
+	if in == nil || in.UserId == "" || in.Password == "" || in.Totp == "" {
 		err = inputError
 
 		return
