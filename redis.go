@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
-	"context"
-	"encoding/gob"
+	"encoding/json"
+	"fmt"
+	"log"
+	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/gomodule/redigo/redis"
 )
 
 var (
@@ -13,17 +15,47 @@ var (
 )
 
 type Redis struct {
-	c *redis.Client
+	pool *redis.Pool
+}
+
+type stringSlice []string
+
+func (ss stringSlice) RedisArg() interface{} {
+	var buf bytes.Buffer
+
+	enc := json.NewEncoder(&buf)
+	enc.Encode(ss)
+
+	return buf.Bytes()
+}
+
+func (ss *stringSlice) RedisScan(src interface{}) error {
+	v, ok := src.([]byte)
+	if !ok {
+		return fmt.Errorf("string slice: cannot convert from %T to %T", src, ss)
+	}
+
+	var buf bytes.Buffer
+	if _, err := buf.Write(v); err != nil {
+		return fmt.Errorf("string slice: write failed: %w", err)
+	}
+
+	dec := json.NewDecoder(&buf)
+	if err := dec.Decode(ss); err != nil {
+		return fmt.Errorf("string slice: decode failed: %w", err)
+	}
+
+	return nil
 }
 
 type User struct {
-	Id          string   `mapstructure:"id"`
-	Password    string   `mapstructure:"password"`
-	Seed        string   `mapstructure:"seed"`
-	Finalised   bool     `mapstructure:"finalised"`
-	Tokens      []string `mapstructure:"tokens"`
-	Connections []string `mapstructure:"connections"`
-	PublicKeys  []string `mapstructure:"public_keys"`
+	Id          string      `mapstructure:"id"`
+	Password    string      `mapstructure:"password"`
+	Seed        string      `mapstructure:"seed"`
+	Finalised   bool        `mapstructure:"finalised"`
+	Tokens      stringSlice `mapstructure:"tokens"`
+	Connections stringSlice `mapstructure:"connections"`
+	PublicKeys  stringSlice `mapstructure:"public_keys"`
 }
 
 func (r Redis) loadUser(id string) (u User, err error) {
@@ -38,8 +70,8 @@ func (r Redis) saveUser(u User) (err error) {
 
 type Group struct {
 	Id          string
-	Owners      []string
-	Members     []string //owner exists in both owners and members; we use members to send messages
+	Owners      stringSlice
+	Members     stringSlice //owner exists in both owners and members; we use members to send messages
 	IsOpen      bool
 	IsBroadcast bool
 }
@@ -55,9 +87,11 @@ func (r Redis) saveGroup(g Group) (err error) {
 }
 
 func NewRedis(addr string) (r Redis, err error) {
-	r.c = redis.NewClient(&redis.Options{
-		Addr: addr,
-	})
+	r.pool = &redis.Pool{
+		MaxIdle:     8,
+		IdleTimeout: 30 * time.Second,
+		Dial:        func() (redis.Conn, error) { return redis.Dial("tcp", addr) },
+	}
 
 	return
 }
@@ -88,7 +122,12 @@ func (r Redis) AddToken(id, token string) (err error) {
 		return
 	}
 
-	return r.c.HSet(context.Background(), tokenIDHMKey, token, id).Err()
+	c := r.pool.Get()
+	defer c.Close()
+
+	_, err = c.Do("HSET", tokenIDHMKey, token, id)
+
+	return
 }
 
 func (r Redis) AddPublicKey(id, pk string) (err error) {
@@ -147,20 +186,53 @@ func (r Redis) IDExists(id string) bool {
 }
 
 func (r Redis) UserByToken(token string) (u User, err error) {
-	res, err := r.c.HGet(context.Background(), tokenIDHMKey, token).Result()
+	c := r.pool.Get()
+	defer c.Close()
+
+	res, err := c.Do("HGET", tokenIDHMKey, token)
 	if err != nil {
 		return
 	}
 
-	return r.loadUser(res)
+	return r.loadUser(string(res.([]byte)))
 }
 
-func (r Redis) Messages(id string) <-chan *redis.Message {
-	return r.c.Subscribe(context.Background(), id).Channel()
+func (r Redis) Messages(id string) chan []byte {
+	c := r.pool.Get()
+
+	out := make(chan []byte)
+
+	go func(c redis.Conn, id string, o chan []byte) {
+		defer c.Close()
+		defer close(out)
+
+		psc := redis.PubSubConn{Conn: c}
+		psc.Subscribe(id)
+
+		for {
+			switch v := psc.Receive().(type) {
+			case redis.Message:
+				o <- v.Data
+			case redis.Subscription:
+				continue
+			case error:
+				log.Print(v)
+
+				return
+			}
+		}
+	}(c, id, out)
+
+	return out
 }
 
-func (r Redis) WriteMessage(recipient string, payload []byte) error {
-	return r.c.Publish(context.Background(), recipient, payload).Err()
+func (r Redis) WriteMessage(recipient string, payload []byte) (err error) {
+	c := r.pool.Get()
+	defer c.Close()
+
+	_, err = c.Do("PUBLISH", recipient, payload)
+
+	return
 }
 
 func (r Redis) AddGroup(id, owner string, open, broadcast bool) (err error) {
@@ -228,30 +300,25 @@ func (r Redis) RemoveFromGroup(group, user string) (err error) {
 	return r.saveGroup(g)
 }
 
-func (r Redis) load(id string, o interface{}) (err error) {
-	res, err := r.c.Get(context.Background(), id).Result()
-	if err != nil {
-		return
-	}
+func (r Redis) save(id string, o interface{}) (err error) {
+	c := r.pool.Get()
+	defer c.Close()
 
-	b := bytes.NewBufferString(res)
-
-	dec := gob.NewDecoder(b)
-	err = dec.Decode(o)
+	_, err = c.Do("HSET", redis.Args{}.Add(id).AddFlat(o)...)
 
 	return
 }
 
-func (r Redis) save(id string, o interface{}) (err error) {
-	b := bytes.Buffer{}
+func (r Redis) load(id string, o interface{}) (err error) {
+	c := r.pool.Get()
+	defer c.Close()
 
-	enc := gob.NewEncoder(&b)
-	err = enc.Encode(o)
+	values, err := redis.Values(c.Do("HGETALL", id))
 	if err != nil {
 		return
 	}
 
-	return r.c.Set(context.Background(), id, b.String(), 0).Err()
+	return redis.ScanStruct(values, o)
 }
 
 func removeElem(ss []string, s string) (out []string) {

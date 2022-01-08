@@ -15,7 +15,7 @@ func (s Server) Subscribe(_ *emptypb.Empty, ss server.Messaging_SubscribeServer)
 
 	for m := range s.redis.Messages(u.Id) {
 		ss.Send(&server.MessageWrapper{
-			Encoded: []byte(m.Payload),
+			Encoded: m,
 		})
 	}
 	return nil
