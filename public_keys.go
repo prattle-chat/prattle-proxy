@@ -33,7 +33,7 @@ func (s Server) AddPublicKey(ctx context.Context, pkv *server.PublicKeyValue) (_
 }
 
 func (s Server) PublicKey(in *server.Auth, pks server.Proxy_PublicKeyServer) (err error) {
-	_, err = s.userFromContext(pks.Context())
+	u, err := s.userFromContext(pks.Context())
 	if err != nil {
 		return
 	}
@@ -44,17 +44,31 @@ func (s Server) PublicKey(in *server.Auth, pks server.Proxy_PublicKeyServer) (er
 	// else: we need to query the remote host associated with this hostname
 	// and get public keys from there
 
-	keys, err := s.redis.GetPublicKeys(in.UserId)
-	if err != nil {
-		err = generalError
+	lookupIds := make([]string, 0)
+	if groupRegexp.Match([]byte(in.UserId)) {
+		g, err := s.redis.Group(in.UserId)
+		if err != nil || !HasPermission(u, g, groupRead) {
+			return badGroupError
+		}
 
-		return
+		for _, u := range g.Members {
+			lookupIds = append(lookupIds, u)
+		}
+	} else {
+		lookupIds = append(lookupIds, in.UserId)
 	}
 
-	for _, key := range keys {
-		pks.Send(&server.PublicKeyValue{
-			Value: key,
-		})
+	for _, id := range lookupIds {
+		keys, err := s.redis.GetPublicKeys(id)
+		if err != nil {
+			return generalError
+		}
+
+		for _, key := range keys {
+			pks.Send(&server.PublicKeyValue{
+				Value: key,
+			})
+		}
 	}
 
 	return

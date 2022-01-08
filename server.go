@@ -30,6 +30,9 @@ var (
 	badTotpError      = status.Error(codes.Unauthenticated, "incorrect totp token")
 	badPasswordError  = status.Error(codes.Unauthenticated, "incorrect password or userid")
 
+	badGroupError  = status.Error(codes.NotFound, "group could not be found")
+	notMemberError = status.Error(codes.NotFound, "user is not a member of this group")
+
 	generalError = status.Error(codes.Unavailable, "an general error occurred")
 	inputError   = status.Error(codes.Unavailable, "missing/ poorly formed input")
 )
