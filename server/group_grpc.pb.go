@@ -24,21 +24,21 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type GroupsClient interface {
 	// CreateGroup will create a group, setting the calling user as owner
-	CreateGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error)
+	Create(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error)
 	// JoinGroup will join the calling user to a group, so long as that
 	// group is set to Open
-	JoinGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	Join(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// Group returns information about a group, such as owners and members
-	GroupInfo(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error)
+	Info(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error)
 	// InviteToGroup allows group owners to invite users to a group
-	InviteToGroup(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	Invite(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// PromoteUser allows a group owner to make another user an owner
 	PromoteUser(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// DemoteUser allows a group owner to demote another owner to
 	// regular user, or to boot a regular user from the group
 	DemoteUser(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// LeaveGroup allows a user to leave a group
-	LeaveGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	Leave(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type groupsClient struct {
@@ -49,36 +49,36 @@ func NewGroupsClient(cc grpc.ClientConnInterface) GroupsClient {
 	return &groupsClient{cc}
 }
 
-func (c *groupsClient) CreateGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error) {
+func (c *groupsClient) Create(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error) {
 	out := new(Group)
-	err := c.cc.Invoke(ctx, "/group.Groups/CreateGroup", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/group.Groups/Create", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *groupsClient) JoinGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *groupsClient) Join(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/group.Groups/JoinGroup", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/group.Groups/Join", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *groupsClient) GroupInfo(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error) {
+func (c *groupsClient) Info(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error) {
 	out := new(Group)
-	err := c.cc.Invoke(ctx, "/group.Groups/GroupInfo", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/group.Groups/Info", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *groupsClient) InviteToGroup(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *groupsClient) Invite(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/group.Groups/InviteToGroup", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/group.Groups/Invite", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -103,9 +103,9 @@ func (c *groupsClient) DemoteUser(ctx context.Context, in *GroupUser, opts ...gr
 	return out, nil
 }
 
-func (c *groupsClient) LeaveGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *groupsClient) Leave(ctx context.Context, in *Group, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/group.Groups/LeaveGroup", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/group.Groups/Leave", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -117,21 +117,21 @@ func (c *groupsClient) LeaveGroup(ctx context.Context, in *Group, opts ...grpc.C
 // for forward compatibility
 type GroupsServer interface {
 	// CreateGroup will create a group, setting the calling user as owner
-	CreateGroup(context.Context, *Group) (*Group, error)
+	Create(context.Context, *Group) (*Group, error)
 	// JoinGroup will join the calling user to a group, so long as that
 	// group is set to Open
-	JoinGroup(context.Context, *Group) (*emptypb.Empty, error)
+	Join(context.Context, *Group) (*emptypb.Empty, error)
 	// Group returns information about a group, such as owners and members
-	GroupInfo(context.Context, *Group) (*Group, error)
+	Info(context.Context, *Group) (*Group, error)
 	// InviteToGroup allows group owners to invite users to a group
-	InviteToGroup(context.Context, *GroupUser) (*emptypb.Empty, error)
+	Invite(context.Context, *GroupUser) (*emptypb.Empty, error)
 	// PromoteUser allows a group owner to make another user an owner
 	PromoteUser(context.Context, *GroupUser) (*emptypb.Empty, error)
 	// DemoteUser allows a group owner to demote another owner to
 	// regular user, or to boot a regular user from the group
 	DemoteUser(context.Context, *GroupUser) (*emptypb.Empty, error)
 	// LeaveGroup allows a user to leave a group
-	LeaveGroup(context.Context, *Group) (*emptypb.Empty, error)
+	Leave(context.Context, *Group) (*emptypb.Empty, error)
 	mustEmbedUnimplementedGroupsServer()
 }
 
@@ -139,17 +139,17 @@ type GroupsServer interface {
 type UnimplementedGroupsServer struct {
 }
 
-func (UnimplementedGroupsServer) CreateGroup(context.Context, *Group) (*Group, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateGroup not implemented")
+func (UnimplementedGroupsServer) Create(context.Context, *Group) (*Group, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
-func (UnimplementedGroupsServer) JoinGroup(context.Context, *Group) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method JoinGroup not implemented")
+func (UnimplementedGroupsServer) Join(context.Context, *Group) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Join not implemented")
 }
-func (UnimplementedGroupsServer) GroupInfo(context.Context, *Group) (*Group, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GroupInfo not implemented")
+func (UnimplementedGroupsServer) Info(context.Context, *Group) (*Group, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Info not implemented")
 }
-func (UnimplementedGroupsServer) InviteToGroup(context.Context, *GroupUser) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method InviteToGroup not implemented")
+func (UnimplementedGroupsServer) Invite(context.Context, *GroupUser) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Invite not implemented")
 }
 func (UnimplementedGroupsServer) PromoteUser(context.Context, *GroupUser) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PromoteUser not implemented")
@@ -157,8 +157,8 @@ func (UnimplementedGroupsServer) PromoteUser(context.Context, *GroupUser) (*empt
 func (UnimplementedGroupsServer) DemoteUser(context.Context, *GroupUser) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DemoteUser not implemented")
 }
-func (UnimplementedGroupsServer) LeaveGroup(context.Context, *Group) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method LeaveGroup not implemented")
+func (UnimplementedGroupsServer) Leave(context.Context, *Group) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Leave not implemented")
 }
 func (UnimplementedGroupsServer) mustEmbedUnimplementedGroupsServer() {}
 
@@ -173,74 +173,74 @@ func RegisterGroupsServer(s grpc.ServiceRegistrar, srv GroupsServer) {
 	s.RegisterService(&Groups_ServiceDesc, srv)
 }
 
-func _Groups_CreateGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Groups_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Group)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GroupsServer).CreateGroup(ctx, in)
+		return srv.(GroupsServer).Create(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/group.Groups/CreateGroup",
+		FullMethod: "/group.Groups/Create",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GroupsServer).CreateGroup(ctx, req.(*Group))
+		return srv.(GroupsServer).Create(ctx, req.(*Group))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Groups_JoinGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Groups_Join_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Group)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GroupsServer).JoinGroup(ctx, in)
+		return srv.(GroupsServer).Join(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/group.Groups/JoinGroup",
+		FullMethod: "/group.Groups/Join",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GroupsServer).JoinGroup(ctx, req.(*Group))
+		return srv.(GroupsServer).Join(ctx, req.(*Group))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Groups_GroupInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Groups_Info_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Group)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GroupsServer).GroupInfo(ctx, in)
+		return srv.(GroupsServer).Info(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/group.Groups/GroupInfo",
+		FullMethod: "/group.Groups/Info",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GroupsServer).GroupInfo(ctx, req.(*Group))
+		return srv.(GroupsServer).Info(ctx, req.(*Group))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Groups_InviteToGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Groups_Invite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GroupUser)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GroupsServer).InviteToGroup(ctx, in)
+		return srv.(GroupsServer).Invite(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/group.Groups/InviteToGroup",
+		FullMethod: "/group.Groups/Invite",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GroupsServer).InviteToGroup(ctx, req.(*GroupUser))
+		return srv.(GroupsServer).Invite(ctx, req.(*GroupUser))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -281,20 +281,20 @@ func _Groups_DemoteUser_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Groups_LeaveGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Groups_Leave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Group)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GroupsServer).LeaveGroup(ctx, in)
+		return srv.(GroupsServer).Leave(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/group.Groups/LeaveGroup",
+		FullMethod: "/group.Groups/Leave",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GroupsServer).LeaveGroup(ctx, req.(*Group))
+		return srv.(GroupsServer).Leave(ctx, req.(*Group))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -307,20 +307,20 @@ var Groups_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*GroupsServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateGroup",
-			Handler:    _Groups_CreateGroup_Handler,
+			MethodName: "Create",
+			Handler:    _Groups_Create_Handler,
 		},
 		{
-			MethodName: "JoinGroup",
-			Handler:    _Groups_JoinGroup_Handler,
+			MethodName: "Join",
+			Handler:    _Groups_Join_Handler,
 		},
 		{
-			MethodName: "GroupInfo",
-			Handler:    _Groups_GroupInfo_Handler,
+			MethodName: "Info",
+			Handler:    _Groups_Info_Handler,
 		},
 		{
-			MethodName: "InviteToGroup",
-			Handler:    _Groups_InviteToGroup_Handler,
+			MethodName: "Invite",
+			Handler:    _Groups_Invite_Handler,
 		},
 		{
 			MethodName: "PromoteUser",
@@ -331,8 +331,8 @@ var Groups_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Groups_DemoteUser_Handler,
 		},
 		{
-			MethodName: "LeaveGroup",
-			Handler:    _Groups_LeaveGroup_Handler,
+			MethodName: "Leave",
+			Handler:    _Groups_Leave_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
