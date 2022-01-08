@@ -1,10 +1,16 @@
 SERVER_DIR := server
-GRPC_FILES := $(SERVER_DIR)/prattle.pb.go        \
-	      $(SERVER_DIR)/prattle_grpc.pb.go
+GRPC_FILES := $(SERVER_DIR)/auth.pb.go             \
+	      $(SERVER_DIR)/auth_grpc.pb.go        \
+	      $(SERVER_DIR)/self.pb.go             \
+	      $(SERVER_DIR)/self_grpc.pb.go        \
+	      $(SERVER_DIR)/messaging.pb.go        \
+	      $(SERVER_DIR)/messaging_grpc.pb.go   \
+	      $(SERVER_DIR)/group.pb.go            \
+	      $(SERVER_DIR)/group_grpc.pb.go
 
 CERTS_DIR ?= certs
-CERTS := $(CERTS_DIR)/ca-key.pem \
-	 $(CERTS_DIR)/ca-cert.pem \
+CERTS := $(CERTS_DIR)/ca-key.pem     \
+	 $(CERTS_DIR)/ca-cert.pem    \
 	 $(CERTS_DIR)/server-key.pem \
 	 $(CERTS_DIR)/server-req.pem \
 	 $(CERTS_DIR)/server-cert.pem

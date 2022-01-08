@@ -40,11 +40,17 @@ func main() {
 	reflection.Register(grpcServer)
 
 	s := Server{
-		UnimplementedProxyServer: server.UnimplementedProxyServer{},
-		redis:                    redis,
+		UnimplementedAuthenticationServer: server.UnimplementedAuthenticationServer{},
+		UnimplementedGroupsServer:         server.UnimplementedGroupsServer{},
+		UnimplementedMessagingServer:      server.UnimplementedMessagingServer{},
+		UnimplementedSelfServer:           server.UnimplementedSelfServer{},
+		redis:                             redis,
 	}
 
-	server.RegisterProxyServer(grpcServer, s)
+	server.RegisterAuthenticationServer(grpcServer, s)
+	server.RegisterGroupsServer(grpcServer, s)
+	server.RegisterMessagingServer(grpcServer, s)
+	server.RegisterSelfServer(grpcServer, s)
 
 	log.Print("Starting server")
 

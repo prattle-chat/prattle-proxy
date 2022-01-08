@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/prattle-chat/prattle-proxy/server";
+
+package auth;
+
+// Authentication provides a namespaced set of rpc endpoints based around
+// signing up (including sign up/ sign in)
+service Authentication {
+  // Signup accepts a new password and mints a new ID and OTP seed
+  rpc Signup(SignupRequest) returns (SignupResponse) {}
+
+  // Finalise is used to finalise the signup flow, which it does by accepting
+  // the minted ID and a valid OTP value.
+  //
+  // This call will return an error or nothing
+  rpc Finalise(Auth) returns (google.protobuf.Empty) {}
+
+  // Token accepts a password and a valid OTP value, returning a new bearer
+  // token which can be used in Subscribing to message stream
+  rpc Token(Auth) returns (TokenValue) {}
+}
+
+// SignupRequest contains a password to be used during Signup
+//
+// This message could be merged with OTPAndKey, but it makes a certain
+// amount of sense to keep this small, explicit, and less complex by
+// making it only used in a single place
+message SignupRequest {
+  string password = 1;
+}
+
+// SignupResponse contains the information necessary to connect to a Proxy;
+// namely: the user's new ID (including domain name information), and a
+// value which can seed an OTP app/authenticator/etc. to act as a password.
+message SignupResponse {
+  string user_id = 1;
+  string totp_seed = 2;
+}
+
+// Auth encapsulates the information necessary to authenticate,
+// specifically:
+//
+//   1. User ID
+//   2. Password
+//   3. TOTP value
+//
+// and is used in a number of places:
+//
+//   1. To finalise signup; and
+//   2. To receive a new session token
+message Auth {
+  string user_id = 1;
+  string password = 2;
+  string totp = 3;
+}
+
+// Token contains a session token, used during Subscribe, Send,
+// and public key operations
+message TokenValue {
+  string value = 1;
+}
