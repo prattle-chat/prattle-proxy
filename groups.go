@@ -9,6 +9,24 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+/**
+  On confusing/ ambiguous method calls:
+
+  Our gRPC calls are all namespaced to things like, in this instance, 'Groups'
+  This allows us to call 'Groups.Create', which makes for a nicer client experience.
+
+  However... we use a single Server which implements all of these namespaces- we have
+  lots of reusable functions and calls to redis that make sense in a single Server; rather
+  than copying references or even structs about.
+
+  The issue becomes, then, implementing functions like the above 'Groups.Create' where
+  Server needs to implement a function ambiguously called 'Create'. There's no real
+  hint that this function is to create a group.
+
+  So, let this long winded comment (plus comments above each function) go some way to
+  provide that hint.
+  **/
+
 type GroupOperation uint8
 
 const (
@@ -24,7 +42,8 @@ var (
 	groupRegexp = regexp.MustCompile("g:.+")
 )
 
-func (s Server) CreateGroup(ctx context.Context, in *server.Group) (out *server.Group, err error) {
+// Create is called byt Group.Create
+func (s Server) Create(ctx context.Context, in *server.Group) (out *server.Group, err error) {
 	u, err := s.userFromContext(ctx)
 	if err != nil {
 		return
@@ -49,7 +68,8 @@ func (s Server) CreateGroup(ctx context.Context, in *server.Group) (out *server.
 	return in, err
 }
 
-func (s Server) JoinGroup(ctx context.Context, in *server.Group) (out *emptypb.Empty, err error) {
+// Join is called by Grouo.Join
+func (s Server) Join(ctx context.Context, in *server.Group) (out *emptypb.Empty, err error) {
 	u, _, err := s.UserAndGroup(ctx, in, groupJoin)
 	if err != nil {
 		return
@@ -63,7 +83,8 @@ func (s Server) JoinGroup(ctx context.Context, in *server.Group) (out *emptypb.E
 	return
 }
 
-func (s Server) GroupInfo(ctx context.Context, in *server.Group) (out *server.Group, err error) {
+// Info is called by Group.Info
+func (s Server) Info(ctx context.Context, in *server.Group) (out *server.Group, err error) {
 	_, g, err := s.UserAndGroup(ctx, in, groupRead)
 	if err != nil {
 		return
@@ -78,7 +99,8 @@ func (s Server) GroupInfo(ctx context.Context, in *server.Group) (out *server.Gr
 	return
 }
 
-func (s Server) InviteToGroup(ctx context.Context, in *server.GroupUser) (_ *emptypb.Empty, err error) {
+// Invite is called by Group.Invite
+func (s Server) Invite(ctx context.Context, in *server.GroupUser) (_ *emptypb.Empty, err error) {
 	_, _, err = s.UserAndGroup(ctx, &server.Group{Id: in.GroupId}, groupModify)
 	if err != nil {
 		return

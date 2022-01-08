@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/prattle-chat/prattle-proxy/server";
+
+package group;
+
+// Group calls govern access to groups in prattle.
+//
+// Groups are essentially lists of users.
+// A group can be open or not; an open group allows anybody to join,
+// whereas a closed group requires explicit invitation
+//
+// A group can also be a broadcast group, which means only owners can
+// send messages
+service Groups {
+    // CreateGroup will create a group, setting the calling user as owner
+  rpc Create(Group) returns (Group) {}
+
+  // JoinGroup will join the calling user to a group, so long as that
+  // group is set to Open
+  rpc Join(Group) returns (google.protobuf.Empty) {}
+
+  // Group returns information about a group, such as owners and members
+  rpc Info(Group) returns (Group) {}
+
+  // InviteToGroup allows group owners to invite users to a group
+  rpc Invite(GroupUser) returns (google.protobuf.Empty) {}
+
+  // PromoteUser allows a group owner to make another user an owner
+  rpc PromoteUser(GroupUser) returns (google.protobuf.Empty) {}
+
+  // DemoteUser allows a group owner to demote another owner to
+  // regular user, or to boot a regular user from the group
+  rpc DemoteUser(GroupUser) returns (google.protobuf.Empty) {}
+
+  // LeaveGroup allows a user to leave a group
+  rpc Leave(Group) returns (google.protobuf.Empty) {}
+}
+
+// Group is used for most group operations, such as:
+//
+//   1. Creating a group (note: ID is ignored; IDs are generated)
+//   2. Joining groups (note: anything _but_ ID is ignored here;
+//      this call fills out missing data in the message and returns it)
+//   3. Viewing group info (note: works the same as Joining)
+message Group {
+  string id = 1;
+  repeated string owners = 2;
+  repeated string members = 3;
+  bool is_open = 4;
+  bool is_broadcast = 5;
+}
+
+// GroupUser is used on operations where a group ID and a user ID
+// is needed, such as invitations, booting users, etc.
+message GroupUser {
+  string group_id = 1;
+  string user_id = 2 ;
+}

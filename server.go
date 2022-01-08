@@ -38,7 +38,10 @@ var (
 )
 
 type Server struct {
-	server.UnimplementedProxyServer
+	server.UnimplementedAuthenticationServer
+	server.UnimplementedGroupsServer
+	server.UnimplementedMessagingServer
+	server.UnimplementedSelfServer
 
 	redis Redis
 }
@@ -107,4 +110,14 @@ func (s Server) userFromContext(ctx context.Context) (u User, err error) {
 	}
 
 	return s.redis.UserByToken(token)
+}
+
+func contains(sl []string, s string) bool {
+	for _, elem := range sl {
+		if elem == s {
+			return true
+		}
+	}
+
+	return false
 }

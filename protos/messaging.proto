@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+import "auth.proto";
+import "self.proto";
+
+option go_package = "github.com/prattle-chat/prattle-proxy/server";
+
+package messaging;
+
+// Messaging provides a set of endpoints based around sending messages
+// between client.
+//
+// These endpoints are also called by federated services in order to
+// send messages between prattle installations, too
+service Messaging {
+    // Subscribe is used to provide a stream to receive a user's messages
+  rpc Subscribe(google.protobuf.Empty) returns (stream MessageWrapper) {}
+
+  // PublicKey retrieves the public keys of a user, handling cases where a key
+  // lives on a third-party proxy instance
+  rpc PublicKey(auth.Auth) returns (stream self.PublicKeyValue) {}
+
+  // Send accepts an encoded/ wrapped message and sends it to a user
+  rpc Send(MessageWrapper) returns (google.protobuf.Empty) {}
+}
+
+// MessageWrappper wraps an encoded/ encrypted message to be forwarded to a recipient
+//
+// Encoded is expected to be formed by taking a 'Message' and encypting it with the
+// recipient's public key. Because of this, that message is where all of the important
+// and useful metadatas are stored, such as sender
+message MessageWrapper {
+  string recipient = 1;
+  bytes encoded = 2;
+}
+
+// Message holds a minimum amount of metadata for a message, plus arbitrary body.
+//
+// This message is expected to be marshalled to text,
+// encrypted with the recipient's public key(s) and then added to a MessageWrapper
+// before being sent to a user
+message Message {
+  // recipient in this context is used to determine whether a message was sent to a
+  // user directly, or to a group
+  string recipient = 1;
+  string sender = 2;
+  google.protobuf.Timestamp datetime = 3;
+  bytes body = 4;
+}

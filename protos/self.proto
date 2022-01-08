@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+import "auth.proto";
+
+option go_package = "github.com/prattle-chat/prattle-proxy/server";
+
+package self;
+
+// Self contains a set of namespaced endpoints which provide
+// light-touch operations around user management.
+//
+// These endpoints require a bearer token from Auth.Token
+service Self {
+  // AddPublicKey adds a new public key for a user. A user can have up to n public
+  // keys, where n is configured on the proxy.
+  //
+  // Where n is too few, a user is limited by the number of clients they can connect
+  // with.
+  // Where n is too high, the cost of sending a user a message becomes high, as does
+  // receiving _for_ that user
+  rpc AddPublicKey(PublicKeyValue) returns (google.protobuf.Empty) {}
+
+  // DelPublicKey removes a Public Key from the calling user
+  rpc DelPublicKey(PublicKeyValue) returns (google.protobuf.Empty) {}
+
+  // Tokens returns a user's current tokens for audit/ removal
+  rpc Tokens(google.protobuf.Empty) returns (stream auth.TokenValue) {}
+
+  // DelToken invalidates a token for a user
+  rpc DelToken(auth.TokenValue) returns (google.protobuf.Empty) {}
+}
+
+// PublicKey contains data associated with Public Keys
+message PublicKeyValue {
+  string value = 1;
+}
