@@ -17,10 +17,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	proxyName = "prattle"
-)
-
 var (
 	sanitiser = bluemonday.StrictPolicy()
 
@@ -43,7 +39,8 @@ type Server struct {
 	server.UnimplementedMessagingServer
 	server.UnimplementedSelfServer
 
-	redis Redis
+	redis  Redis
+	config *Configuration
 }
 
 func (s Server) mintID() (id string, err error) {
@@ -61,7 +58,7 @@ func (s Server) mintID() (id string, err error) {
 		words[0],
 		words[1],
 		hex.EncodeToString(suffix),
-		proxyName,
+		s.config.DomainName,
 	)
 
 	// test whether id is in use
@@ -73,8 +70,7 @@ func (s Server) mintID() (id string, err error) {
 }
 
 func (s Server) mintToken() string {
-	return fmt.Sprintf("%s-%s%s%s",
-		proxyName,
+	return fmt.Sprintf("prattle-%s%s%s",
 		hex.EncodeToString(uuid.Must(uuid.NewV4()).Bytes()),
 		hex.EncodeToString(uuid.Must(uuid.NewV4()).Bytes()),
 		hex.EncodeToString(uuid.Must(uuid.NewV4()).Bytes()),

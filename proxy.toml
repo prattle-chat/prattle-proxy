@@ -1,0 +1,13 @@
+# This file contains a sample config file for the prattle-proxy
+
+domain_name = "prattle"
+listen_addr = "localhost:8080"
+redis_addr = "localhost:6379"
+max_tokens = 10
+max_keys = 10
+revalidate_frequency = "1s"
+
+[federations]
+[federations.prittle]
+connection_string = "localhost:8081"
+psk = "F6oqn7CuhrUF0/V2v1+NsO194cQ993t4vrjm4XdqrVS5v+e440ZpQ96hqUCpPmnFvICyfugQc/O1PiPQ4g5tNg=="  # dd if=/dev/random bs=1 count=64| base64 -w0
