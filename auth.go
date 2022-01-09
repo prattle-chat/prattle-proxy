@@ -31,7 +31,7 @@ func (s Server) Signup(ctx context.Context, in *server.SignupRequest) (out *serv
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "prattle",
+		Issuer:      s.config.DomainName,
 		AccountName: out.UserId,
 	})
 
