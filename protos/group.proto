@@ -18,9 +18,8 @@ service Groups {
     // CreateGroup will create a group, setting the calling user as owner
   rpc Create(Group) returns (Group) {}
 
-  // JoinGroup will join the calling user to a group, so long as that
-  // group is set to Open
-  rpc Join(Group) returns (google.protobuf.Empty) {}
+  // Join will
+  rpc Join(GroupUser) returns (google.protobuf.Empty) {}
 
   // Group returns information about a group, such as owners and members
   rpc Info(Group) returns (Group) {}
@@ -36,15 +35,13 @@ service Groups {
   rpc DemoteUser(GroupUser) returns (google.protobuf.Empty) {}
 
   // LeaveGroup allows a user to leave a group
-  rpc Leave(Group) returns (google.protobuf.Empty) {}
+  rpc Leave(GroupUser) returns (google.protobuf.Empty) {}
 }
 
 // Group is used for most group operations, such as:
 //
 //   1. Creating a group (note: ID is ignored; IDs are generated)
-//   2. Joining groups (note: anything _but_ ID is ignored here;
-//      this call fills out missing data in the message and returns it)
-//   3. Viewing group info (note: works the same as Joining)
+//   2. Viewing group info
 message Group {
   string id = 1;
   repeated string owners = 2;

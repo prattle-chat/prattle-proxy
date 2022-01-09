@@ -31,10 +31,15 @@ service Messaging {
 //
 // Encoded is expected to be formed by taking a 'Message' and encypting it with the
 // recipient's public key. Because of this, that message is where all of the important
-// and useful metadatas are stored, such as sender
+// and useful metadatas are stored, such as sender.
+//
+// While the existence of the Sender field makes it easy to log and track who is sending
+// messages where, it does allow us to check permissions more easily, and it does allow
+// us to ensure senders are not spoofed in payloads
 message MessageWrapper {
   string recipient = 1;
-  bytes encoded = 2;
+  string sender = 2;
+  bytes encoded = 3;
 }
 
 // Message holds a minimum amount of metadata for a message, plus arbitrary body.
@@ -49,4 +54,5 @@ message Message {
   string sender = 2;
   google.protobuf.Timestamp datetime = 3;
   bytes body = 4;
+  string mimetype = 5;
 }

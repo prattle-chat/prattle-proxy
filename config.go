@@ -1,87 +1,13 @@
 package main
 
 import (
-	"context"
-	"crypto/tls"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/prattle-chat/prattle-proxy/server"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 )
-
-// Federation holds per federated-connection details,
-// such as PSKs and domain names
-type Federation struct {
-	// ConnectionString is a gRPC connection address for
-	// another server which talks prattle
-	ConnectionString string `mapstructure:"connection_string"`
-
-	// PSK is used as a bearer token when proxying
-	// connections to and from this Federation instance
-	PSK string `mapstructure:"psk"`
-
-	// conn holds a gRPC connection to this federated prattle
-	// instance on the messaging namespace
-	conn server.MessagingClient
-}
-
-func (f *Federation) connect() (err error) {
-	conn, err := grpc.Dial(f.ConnectionString, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
-	if err != nil {
-		return
-	}
-
-	f.conn = server.NewMessagingClient(conn)
-
-	return
-}
-
-// Send proxies a message to a federated connection
-func (f Federation) Send(mw *server.MessageWrapper) (err error) {
-	ctx := context.Background()
-
-	md := metadata.New(map[string]string{"authorization": fmt.Sprintf("bearer %s", f.PSK)})
-	ctx = metadata.NewOutgoingContext(ctx, md)
-
-	_, err = f.conn.Send(ctx, mw)
-
-	return
-}
-
-// PubicKey proxies a PublicKey request to a peered prattle
-func (f Federation) PublicKey(in *server.Auth, pks server.Messaging_PublicKeyServer) (err error) {
-	ctx := context.Background()
-
-	md := metadata.New(map[string]string{"authorization": fmt.Sprintf("bearer %s", f.PSK)})
-	ctx = metadata.NewOutgoingContext(ctx, md)
-
-	kc, err := f.conn.PublicKey(ctx, in)
-	if err != nil {
-		return
-	}
-
-	for {
-		k, err := kc.Recv()
-		if err != nil && err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			panic(err)
-		}
-
-		pks.Send(k)
-	}
-
-	return
-}
 
 // Configuration holds configurables for the prattle-proxy
 type Configuration struct {
