@@ -7,10 +7,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-const (
-	maxKeys = 10
-)
-
 func (s Server) AddPublicKey(ctx context.Context, pkv *server.PublicKeyValue) (_ *emptypb.Empty, err error) {
 	u, err := s.userFromContext(ctx)
 	if err != nil {
@@ -18,8 +14,8 @@ func (s Server) AddPublicKey(ctx context.Context, pkv *server.PublicKeyValue) (_
 	}
 
 	u.PublicKeys = append(u.PublicKeys, pkv.Value)
-	if len(u.PublicKeys) >= maxKeys {
-		u.PublicKeys = u.PublicKeys[len(u.PublicKeys)-maxKeys : len(u.PublicKeys)]
+	if len(u.PublicKeys) >= s.config.MaxKeys {
+		u.PublicKeys = u.PublicKeys[len(u.PublicKeys)-s.config.MaxKeys : len(u.PublicKeys)]
 	}
 
 	err = s.redis.saveUser(u)

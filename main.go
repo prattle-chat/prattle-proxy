@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"log"
 	"net"
-	"os"
 
 	"github.com/prattle-chat/prattle-proxy/server"
 	"google.golang.org/grpc"
@@ -12,18 +11,18 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-var (
-	RedisAddr = os.Getenv("REDIS_ADDR")
-)
-
 func main() {
-	redis, err := NewRedis(RedisAddr)
+	config, err := LoadConfig()
 	if err != nil {
 		panic(err)
 	}
 
-	// #nosec
-	lis, err := net.Listen("tcp", "0.0.0.0:8080")
+	redis, err := NewRedis(config.RedisAddr)
+	if err != nil {
+		panic(err)
+	}
+
+	lis, err := net.Listen("tcp", config.ListenAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -45,6 +44,7 @@ func main() {
 		UnimplementedMessagingServer:      server.UnimplementedMessagingServer{},
 		UnimplementedSelfServer:           server.UnimplementedSelfServer{},
 		redis:                             redis,
+		config:                            config,
 	}
 
 	server.RegisterAuthenticationServer(grpcServer, s)
@@ -52,7 +52,7 @@ func main() {
 	server.RegisterMessagingServer(grpcServer, s)
 	server.RegisterSelfServer(grpcServer, s)
 
-	log.Print("Starting server")
+	log.Printf("Starting server on %s", config.ListenAddr)
 
 	panic(grpcServer.Serve(lis))
 }
