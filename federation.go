@@ -71,6 +71,8 @@ func (f Federation) PublicKey(in *server.Auth, pks server.Messaging_PublicKeySer
 		var k *server.PublicKeyValue
 		k, err = kc.Recv()
 		if err != nil && err == io.EOF {
+			err = nil
+
 			break
 		}
 
@@ -90,10 +92,8 @@ func (f Federation) JoinGroup(in *server.GroupUser) (err error) {
 	return
 }
 
-func (f Federation) GroupInfo(in *server.Group) (err error) {
-	_, err = f.group.Info(f.auth(), in)
-
-	return
+func (f Federation) GroupInfo(in *server.GroupUser) (out *server.Group, err error) {
+	return f.group.Info(f.auth(), in)
 }
 
 func (f Federation) InviteToGroup(in *server.GroupUser) (err error) {

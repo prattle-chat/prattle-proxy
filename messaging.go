@@ -1,98 +1,112 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 
 	"github.com/prattle-chat/prattle-proxy/server"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func (s Server) Subscribe(_ *emptypb.Empty, ss server.Messaging_SubscribeServer) (err error) {
-	u, err := s.userFromContext(ss.Context())
-	if err != nil {
-		return
-	}
+	m := ss.Context().Value(MetadataKey{}).(*Metadata)
 
-	for m := range s.redis.Messages(u.Id) {
-		ss.Send(&server.MessageWrapper{
-			Encoded: m,
-		})
+	var (
+		buf *bytes.Buffer
+		out *server.MessageWrapper
+	)
+
+	for msg := range s.redis.Messages(m.Sender.Id) {
+		buf = bytes.NewBuffer(msg)
+		dec := gob.NewDecoder(buf)
+
+		err = dec.Decode(&out)
+		if err != nil {
+			return
+		}
+
+		ss.Send(out)
 	}
 	return nil
 }
 
+// Send accepts a message for a user and either proxies it to the correct server,
+// or passes it to a user, depending on whether the user is peered or local (respectively).
+//
+// This endpoint will error if the user is a group; clients should encrypt and send messages
+// to users directly, setting the Recipient field of the encoded Server.Message type to the
+// group name.
 func (s Server) Send(ctx context.Context, in *server.MessageWrapper) (out *emptypb.Empty, err error) {
-	u, err := s.userFromContext(ctx)
-	if err != nil {
+	m := ctx.Value(MetadataKey{}).(*Metadata)
+
+	if groupRegexp.Match([]byte(m.Recipient.Id)) {
+		err = inputError
+
 		return
 	}
 
 	out = new(emptypb.Empty)
+	if !m.Recipient.IsLocal {
+		in.Sender = m.Sender.Id
+		err = m.Recipient.PeerConnection.Send(in)
 
-	if groupRegexp.Match([]byte(in.Recipient)) {
-		g, err := s.redis.Group(in.Recipient)
-		if err != nil {
-			err = badGroupError
-
-			return out, err
-		}
-
-		if HasPermission(u, g, groupPost) {
-			for _, m := range g.Members {
-				err = s.redis.WriteMessage(m, in.Encoded)
-				if err != nil {
-					return out, err
-				}
-			}
-		}
-
-		return out, err
+		return
 	}
 
-	// add to redis pub key of 'wrapper.Recipient'
-	err = s.redis.WriteMessage(in.Recipient, in.Encoded)
+	msg := mwToBytes(in)
+	err = s.redis.WriteMessage(m.Recipient.Id, msg)
 
 	return
 }
 
+// PublicKey returns the public keys associated with a user.
+//
+// Trying to load keys associated with a group will return an error; clients
+// should maintain a store of individual user keys
+//
+// This function accepts either a local user, or a user for a peered
+// server.
 func (s Server) PublicKey(in *server.Auth, pks server.Messaging_PublicKeyServer) (err error) {
-	u, err := s.userFromContext(pks.Context())
+	if groupRegexp.Match([]byte(in.UserId)) {
+		return inputError
+	}
+
+	d, err := domain(in.UserId)
 	if err != nil {
+		return inputError
+	}
+
+	if d == s.config.DomainName {
+		var u User
+
+		u, err = s.redis.loadUser(in.UserId)
+		if err != nil {
+			return
+		}
+
+		for _, k := range u.PublicKeys {
+			pks.Send(&server.PublicKeyValue{
+				Value: k,
+			})
+		}
+
 		return
 	}
 
-	// todo: this is the point at which we need to test the hostname of
-	// in.UserId - if the hostname is our host then we can lookup in redis.
-	//
-	// else: we need to query the remote host associated with this hostname
-	// and get public keys from there
-
-	lookupIds := make([]string, 0)
-	if groupRegexp.Match([]byte(in.UserId)) {
-		g, err := s.redis.Group(in.UserId)
-		if err != nil || !HasPermission(u, g, groupRead) {
-			return badGroupError
-		}
-
-		for _, u := range g.Members {
-			lookupIds = append(lookupIds, u)
-		}
-	} else {
-		lookupIds = append(lookupIds, in.UserId)
+	peer, ok := s.config.Federations[d]
+	if !ok {
+		return notPeeredError
 	}
 
-	for _, id := range lookupIds {
-		keys, err := s.redis.GetPublicKeys(id)
-		if err != nil {
-			return generalError
-		}
+	return peer.PublicKey(in, pks)
+}
 
-		for _, key := range keys {
-			pks.Send(&server.PublicKeyValue{
-				Value: key,
-			})
-		}
-	}
+func mwToBytes(mw *server.MessageWrapper) []byte {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
 
-	return
+	enc.Encode(mw)
+
+	return buf.Bytes()
 }

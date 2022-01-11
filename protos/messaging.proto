@@ -16,7 +16,7 @@ package messaging;
 // These endpoints are also called by federated services in order to
 // send messages between prattle installations, too
 service Messaging {
-    // Subscribe is used to provide a stream to receive a user's messages
+  // Subscribe is used to provide a stream to receive a user's messages
   rpc Subscribe(google.protobuf.Empty) returns (stream MessageWrapper) {}
 
   // PublicKey retrieves the public keys of a user, handling cases where a key
