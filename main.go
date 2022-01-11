@@ -5,7 +5,11 @@ import (
 	"log"
 	"net"
 
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/prattle-chat/prattle-proxy/server"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
@@ -32,12 +36,6 @@ func main() {
 		panic(err)
 	}
 
-	grpcServer := grpc.NewServer(
-		grpc.Creds(tlsCredentials),
-	)
-
-	reflection.Register(grpcServer)
-
 	s := Server{
 		UnimplementedAuthenticationServer: server.UnimplementedAuthenticationServer{},
 		UnimplementedGroupsServer:         server.UnimplementedGroupsServer{},
@@ -46,6 +44,27 @@ func main() {
 		redis:                             redis,
 		config:                            config,
 	}
+
+	logger, err := zap.NewProduction(zap.AddCallerSkip(6))
+	if err != nil {
+		panic(err)
+	}
+
+	grpcServer := grpc.NewServer(
+		grpc.Creds(tlsCredentials),
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
+			grpc_ctxtags.StreamServerInterceptor(),
+			grpc_zap.StreamServerInterceptor(logger),
+			s.FederatedEndpointStreamInterceptor,
+		)),
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			grpc_ctxtags.UnaryServerInterceptor(),
+			grpc_zap.UnaryServerInterceptor(logger),
+			s.FederatedEndpointUnaryInterceptor,
+		)),
+	)
+
+	reflection.Register(grpcServer)
 
 	server.RegisterAuthenticationServer(grpcServer, s)
 	server.RegisterGroupsServer(grpcServer, s)

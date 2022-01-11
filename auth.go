@@ -31,9 +31,14 @@ func (s Server) Signup(ctx context.Context, in *server.SignupRequest) (out *serv
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "prattle",
+		Issuer:      s.config.DomainName,
 		AccountName: out.UserId,
 	})
+	if err != nil {
+		err = generalError
+
+		return
+	}
 
 	out.TotpSeed = key.Secret()
 
@@ -62,7 +67,7 @@ func (s Server) Finalise(ctx context.Context, in *server.Auth) (_ *emptypb.Empty
 
 	err = s.redis.MarkFinalised(in.UserId)
 
-	return &emptypb.Empty{}, nil
+	return &emptypb.Empty{}, err
 }
 
 func (s Server) Token(ctx context.Context, in *server.Auth) (out *server.TokenValue, err error) {

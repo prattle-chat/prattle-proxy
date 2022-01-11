@@ -24,6 +24,8 @@ func (ss stringSlice) RedisArg() interface{} {
 	var buf bytes.Buffer
 
 	enc := json.NewEncoder(&buf)
+
+	//#nosec
 	enc.Encode(ss)
 
 	return buf.Bytes()
@@ -58,32 +60,12 @@ type User struct {
 	PublicKeys  stringSlice `mapstructure:"public_keys"`
 }
 
-func (r Redis) loadUser(id string) (u User, err error) {
-	err = r.load(id, &u)
-
-	return
-}
-
-func (r Redis) saveUser(u User) (err error) {
-	return r.save(u.Id, u)
-}
-
 type Group struct {
 	Id          string
 	Owners      stringSlice
 	Members     stringSlice //owner exists in both owners and members; we use members to send messages
 	IsOpen      bool
 	IsBroadcast bool
-}
-
-func (r Redis) loadGroup(id string) (g Group, err error) {
-	err = r.load(id, &g)
-
-	return
-}
-
-func (r Redis) saveGroup(g Group) (err error) {
-	return r.save(g.Id, g)
 }
 
 func NewRedis(addr string) (r Redis, err error) {
@@ -185,16 +167,25 @@ func (r Redis) IDExists(id string) bool {
 	return err == nil && u.Id != ""
 }
 
-func (r Redis) UserByToken(token string) (u User, err error) {
+func (r Redis) UserIdByToken(token string) (id string, err error) {
 	c := r.pool.Get()
 	defer c.Close()
 
 	res, err := c.Do("HGET", tokenIDHMKey, token)
+	if err != nil || res == nil {
+		return
+	}
+
+	return string(res.([]byte)), nil
+}
+
+func (r Redis) UserByToken(token string) (u User, err error) {
+	id, err := r.UserIdByToken(token)
 	if err != nil {
 		return
 	}
 
-	return r.loadUser(string(res.([]byte)))
+	return r.loadUser(id)
 }
 
 func (r Redis) Messages(id string) chan []byte {
@@ -207,6 +198,8 @@ func (r Redis) Messages(id string) chan []byte {
 		defer close(out)
 
 		psc := redis.PubSubConn{Conn: c}
+
+		// #nosec
 		psc.Subscribe(id)
 
 		for {
@@ -298,6 +291,26 @@ func (r Redis) RemoveFromGroup(group, user string) (err error) {
 	g.Members = removeElem(g.Members, user)
 
 	return r.saveGroup(g)
+}
+
+func (r Redis) loadUser(id string) (u User, err error) {
+	err = r.load(id, &u)
+
+	return
+}
+
+func (r Redis) saveUser(u User) (err error) {
+	return r.save(u.Id, u)
+}
+
+func (r Redis) loadGroup(id string) (g Group, err error) {
+	err = r.load(id, &g)
+
+	return
+}
+
+func (r Redis) saveGroup(g Group) (err error) {
+	return r.save(g.Id, g)
 }
 
 func (r Redis) save(id string, o interface{}) (err error) {

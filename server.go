@@ -5,11 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/alexedwards/argon2id"
 	"github.com/gofrs/uuid"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
-	"github.com/microcosm-cc/bluemonday"
 	"github.com/pquerna/otp/totp"
 	"github.com/prattle-chat/prattle-proxy/server"
 	"github.com/sethvargo/go-diceware/diceware"
@@ -18,8 +18,6 @@ import (
 )
 
 var (
-	sanitiser = bluemonday.StrictPolicy()
-
 	passwordError     = status.Error(codes.Unauthenticated, "password must be between 16 and 64 chars")
 	authError         = status.Error(codes.Unauthenticated, "missing/ unreadble bearer token")
 	needFinaliseError = status.Error(codes.Unauthenticated, "must finalise signup")
@@ -27,11 +25,13 @@ var (
 	badPasswordError  = status.Error(codes.Unauthenticated, "incorrect password or userid")
 
 	badGroupError  = status.Error(codes.NotFound, "group could not be found")
-	notMemberError = status.Error(codes.NotFound, "user is not a member of this group")
+	notPeeredError = status.Error(codes.NotFound, "recipient is on a non-peered domain")
 
 	generalError = status.Error(codes.Unavailable, "an general error occurred")
 	inputError   = status.Error(codes.Unavailable, "missing/ poorly formed input")
 )
+
+type MetadataKey struct{}
 
 type Server struct {
 	server.UnimplementedAuthenticationServer
@@ -108,6 +108,20 @@ func (s Server) userFromContext(ctx context.Context) (u User, err error) {
 	return s.redis.UserByToken(token)
 }
 
+func (s Server) isFederated(tok string) (string, bool) {
+	for d, f := range s.config.Federations {
+		if f.PSK == tok {
+			return d, true
+		}
+	}
+
+	return "", false
+}
+
+func (s Server) idFromToken(tok string) (string, error) {
+	return s.redis.UserIdByToken(tok)
+}
+
 func contains(sl []string, s string) bool {
 	for _, elem := range sl {
 		if elem == s {
@@ -116,4 +130,17 @@ func contains(sl []string, s string) bool {
 	}
 
 	return false
+}
+
+func domain(s string) (d string, err error) {
+	ss := strings.Split(s, "@")
+	if len(ss) != 2 {
+		err = inputError
+
+		return
+	}
+
+	d = ss[1]
+
+	return
 }
