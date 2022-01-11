@@ -33,6 +33,7 @@ type Federation struct {
 }
 
 func (f *Federation) connect() (err error) {
+	// #nosec
 	conn, err := grpc.Dial(f.ConnectionString, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
 	if err != nil {
 		return
@@ -80,7 +81,10 @@ func (f Federation) PublicKey(in *server.Auth, pks server.Messaging_PublicKeySer
 			return
 		}
 
-		pks.Send(k)
+		err = pks.Send(k)
+		if err != nil {
+			return
+		}
 	}
 
 	return

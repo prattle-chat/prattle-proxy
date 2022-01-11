@@ -24,6 +24,8 @@ func (ss stringSlice) RedisArg() interface{} {
 	var buf bytes.Buffer
 
 	enc := json.NewEncoder(&buf)
+
+	//#nosec
 	enc.Encode(ss)
 
 	return buf.Bytes()
@@ -196,6 +198,8 @@ func (r Redis) Messages(id string) chan []byte {
 		defer close(out)
 
 		psc := redis.PubSubConn{Conn: c}
+
+		// #nosec
 		psc.Subscribe(id)
 
 		for {

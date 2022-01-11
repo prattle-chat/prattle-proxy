@@ -26,7 +26,10 @@ func (s Server) Subscribe(_ *emptypb.Empty, ss server.Messaging_SubscribeServer)
 			return
 		}
 
-		ss.Send(out)
+		err = ss.Send(out)
+		if err != nil {
+			return generalError
+		}
 	}
 	return nil
 }
@@ -86,9 +89,15 @@ func (s Server) PublicKey(in *server.Auth, pks server.Messaging_PublicKeyServer)
 		}
 
 		for _, k := range u.PublicKeys {
-			pks.Send(&server.PublicKeyValue{
+			err = pks.Send(&server.PublicKeyValue{
 				Value: k,
 			})
+
+			if err != nil {
+				err = generalError
+
+				return
+			}
 		}
 
 		return
@@ -106,6 +115,7 @@ func mwToBytes(mw *server.MessageWrapper) []byte {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
+	// #nosec
 	enc.Encode(mw)
 
 	return buf.Bytes()

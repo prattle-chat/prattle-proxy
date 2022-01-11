@@ -165,14 +165,32 @@ func (s Server) auth(ctx context.Context, m *Metadata) (token string, err error)
 	token, err = grpc_auth.AuthFromMD(ctx, "bearer")
 	if err != nil || token == "" {
 		err = authError
+
+		return
 	}
 
 	// test whether incoming is a valid token; whether fed or user
 	id, err := s.idFromToken(token)
 	if err != nil {
 		err = generalError
+
+		return
 	}
 	if id != "" {
+		var u User
+		u, err = s.redis.loadUser(id)
+		if err != nil || u.Id == "" {
+			err = inputError
+
+			return
+		}
+
+		if !u.Finalised {
+			err = needFinaliseError
+
+			return
+		}
+
 		m.Sender = Actor{
 			Id:      id,
 			IsLocal: true,
