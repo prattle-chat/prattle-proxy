@@ -28,7 +28,7 @@ type GroupsClient interface {
 	// Join will
 	Join(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// Group returns information about a group, such as owners and members
-	Info(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error)
+	Info(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*Group, error)
 	// InviteToGroup allows group owners to invite users to a group
 	Invite(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// PromoteUser allows a group owner to make another user an owner
@@ -66,7 +66,7 @@ func (c *groupsClient) Join(ctx context.Context, in *GroupUser, opts ...grpc.Cal
 	return out, nil
 }
 
-func (c *groupsClient) Info(ctx context.Context, in *Group, opts ...grpc.CallOption) (*Group, error) {
+func (c *groupsClient) Info(ctx context.Context, in *GroupUser, opts ...grpc.CallOption) (*Group, error) {
 	out := new(Group)
 	err := c.cc.Invoke(ctx, "/group.Groups/Info", in, out, opts...)
 	if err != nil {
@@ -120,7 +120,7 @@ type GroupsServer interface {
 	// Join will
 	Join(context.Context, *GroupUser) (*emptypb.Empty, error)
 	// Group returns information about a group, such as owners and members
-	Info(context.Context, *Group) (*Group, error)
+	Info(context.Context, *GroupUser) (*Group, error)
 	// InviteToGroup allows group owners to invite users to a group
 	Invite(context.Context, *GroupUser) (*emptypb.Empty, error)
 	// PromoteUser allows a group owner to make another user an owner
@@ -143,7 +143,7 @@ func (UnimplementedGroupsServer) Create(context.Context, *Group) (*Group, error)
 func (UnimplementedGroupsServer) Join(context.Context, *GroupUser) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Join not implemented")
 }
-func (UnimplementedGroupsServer) Info(context.Context, *Group) (*Group, error) {
+func (UnimplementedGroupsServer) Info(context.Context, *GroupUser) (*Group, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Info not implemented")
 }
 func (UnimplementedGroupsServer) Invite(context.Context, *GroupUser) (*emptypb.Empty, error) {
@@ -208,7 +208,7 @@ func _Groups_Join_Handler(srv interface{}, ctx context.Context, dec func(interfa
 }
 
 func _Groups_Info_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Group)
+	in := new(GroupUser)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func _Groups_Info_Handler(srv interface{}, ctx context.Context, dec func(interfa
 		FullMethod: "/group.Groups/Info",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GroupsServer).Info(ctx, req.(*Group))
+		return srv.(GroupsServer).Info(ctx, req.(*GroupUser))
 	}
 	return interceptor(ctx, in, info, handler)
 }

@@ -22,7 +22,7 @@ service Groups {
   rpc Join(GroupUser) returns (google.protobuf.Empty) {}
 
   // Group returns information about a group, such as owners and members
-  rpc Info(Group) returns (Group) {}
+  rpc Info(GroupUser) returns (Group) {}
 
   // InviteToGroup allows group owners to invite users to a group
   rpc Invite(GroupUser) returns (google.protobuf.Empty) {}
