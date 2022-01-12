@@ -188,6 +188,15 @@ func (r Redis) UserByToken(token string) (u User, err error) {
 	return r.loadUser(id)
 }
 
+func (r Redis) DeleteToken(token string) (err error) {
+	c := r.pool.Get()
+	defer c.Close()
+
+	_, err = c.Do("HDEL", tokenIDHMKey, token)
+
+	return
+}
+
 func (r Redis) Messages(id string) chan []byte {
 	c := r.pool.Get()
 

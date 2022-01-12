@@ -27,8 +27,11 @@ var (
 	badGroupError  = status.Error(codes.NotFound, "group could not be found")
 	notPeeredError = status.Error(codes.NotFound, "recipient is on a non-peered domain")
 
-	generalError = status.Error(codes.Unavailable, "an general error occurred")
+	generalError = status.Error(codes.Unavailable, "an internal systems error occurred")
 	inputError   = status.Error(codes.Unavailable, "missing/ poorly formed input")
+
+	mismatchedSenderError = status.Error(codes.InvalidArgument, "mismatch between sender field and owner of token")
+	mismatchedDomainError = status.Error(codes.InvalidArgument, "mismatch between sender domain and the domain this federated peer belongs to")
 )
 
 type MetadataKey struct{}
