@@ -133,14 +133,12 @@ func (r Redis) GetPublicKeys(id string) ([]string, error) {
 }
 
 func (r Redis) MarkFinalised(id string) (err error) {
-	u, err := r.loadUser(id)
-	if err != nil {
-		return
-	}
+	c := r.pool.Get()
+	defer c.Close()
 
-	u.Finalised = true
+	_, err = c.Do("HSET", id, "Finalised", true)
 
-	return r.saveUser(u)
+	return
 }
 
 func (r Redis) GetTOTPSeed(id string) (s string, err error) {

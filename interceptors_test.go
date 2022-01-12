@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/prattle-chat/prattle-proxy/server"
+	"github.com/rafaeljusto/redigomock/v3"
 )
 
 // TestServer_FederatedEndpoints_SendMessage tests the unary interceptor by trying to send some messages
@@ -12,7 +13,7 @@ import (
 func TestServer_FederatedEndpoints_SendMessage(t *testing.T) {
 	for _, test := range []struct {
 		name        string
-		mocks       func()
+		mocks       func(*redigomock.Conn)
 		ctx         context.Context
 		request     *server.MessageWrapper
 		expectError string
@@ -35,8 +36,9 @@ func TestServer_FederatedEndpoints_SendMessage(t *testing.T) {
 		{"peered user missing domain", validPeeredToPeered, key("blahblahblah").Auth(), &server.MessageWrapper{Recipient: "recipient@none", Sender: "admin"}, "rpc error: code = Unavailable desc = missing/ poorly formed input"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			test.mocks()
-			newTestServer(NewDummyRedis(redigoMockConn))
+			test.mocks(conn)
+
+			newTestServer(NewDummyRedis(conn))
 
 			client := newTestMessageClient()
 
@@ -49,7 +51,7 @@ func TestServer_FederatedEndpoints_SendMessage(t *testing.T) {
 				t.Errorf("expected %q, received %q", test.expectError, err.Error())
 			}
 
-			met := redigoMockConn.ExpectationsWereMet()
+			met := conn.ExpectationsWereMet()
 			if met != nil {
 				t.Errorf("redis expectations were not met\n%v", met)
 			}

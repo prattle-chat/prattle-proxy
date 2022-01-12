@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/prattle-chat/prattle-proxy/server"
+	"github.com/rafaeljusto/redigomock/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -28,7 +29,7 @@ func TestServer_Send(t *testing.T) {
 		key         string
 		sender      string
 		recipient   string
-		mocks       func()
+		mocks       func(*redigomock.Conn)
 		expectError bool
 	}{
 		{"Valid local user can send to valid local user", "foo", "some-user@testing", "recipient@testing", validTokenUserRecipientAndPublish, false},
@@ -39,8 +40,9 @@ func TestServer_Send(t *testing.T) {
 		{"Sending to groups fails", "foo", "some-user@testing", "g:group@testing", validTokenAndUser, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			test.mocks()
-			newTestServer(NewDummyRedis(redigoMockConn))
+			test.mocks(conn)
+
+			newTestServer(NewDummyRedis(conn))
 
 			client := newTestMessageClient()
 			_, err := client.Send(key(test.key).Auth(), &server.MessageWrapper{
@@ -65,7 +67,7 @@ func TestServer_PublicKeys(t *testing.T) {
 		name        string
 		key         string
 		user        string
-		mocks       func()
+		mocks       func(*redigomock.Conn)
 		expect      []string
 		expectError bool
 	}{
@@ -77,8 +79,9 @@ func TestServer_PublicKeys(t *testing.T) {
 		{"Group public keys fails", "foo", "g:group@testing", validTokenAndUser, []string{}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			test.mocks()
-			newTestServer(NewDummyRedis(redigoMockConn))
+			test.mocks(conn)
+
+			newTestServer(NewDummyRedis(conn))
 
 			client := newTestMessageClient()
 
@@ -119,15 +122,17 @@ func TestServer_Subscribe(t *testing.T) {
 		name        string
 		key         string
 		user        string
-		mocks       func()
+		mocks       func(*redigomock.Conn)
 		expect      []string
 		expectError bool
 	}{
 		{"Valid user with messages", "foo", "some-user@testing", validPeerReceiveMessage, []string{}, false},
+		{"Remote users cannot access messages", "foo", "some-user@none", validPeeredToPeered, []string{}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			test.mocks()
-			newTestServer(NewDummyRedis(redigoMockConn))
+			test.mocks(conn)
+
+			newTestServer(NewDummyRedis(conn))
 
 			client := newTestMessageClient()
 

@@ -9,7 +9,7 @@ require (
 	github.com/gomodule/redigo v1.8.8
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/pquerna/otp v1.3.0
-	github.com/rafaeljusto/redigomock v2.4.0+incompatible
+	github.com/rafaeljusto/redigomock/v3 v3.0.1
 	github.com/sethvargo/go-diceware v0.2.1
 	github.com/spf13/viper v1.10.0
 	go.uber.org/zap v1.17.0
