@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/prattle-chat/prattle-proxy/server"
-	"google.golang.org/grpc"
 )
 
 // TestServer_FederatedEndpoints_SendMessage tests the unary interceptor by trying to send some messages
@@ -39,15 +38,9 @@ func TestServer_FederatedEndpoints_SendMessage(t *testing.T) {
 			test.mocks()
 			newTestServer(NewDummyRedis(redigoMockConn))
 
-			conn, err := grpc.DialContext(context.Background(), "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
-			if err != nil {
-				t.Fatalf("Failed to dial bufnet: %v", err)
-			}
-			defer conn.Close()
+			client := newTestMessageClient()
 
-			client := server.NewMessagingClient(conn)
-
-			_, err = client.Send(test.ctx, test.request)
+			_, err := client.Send(test.ctx, test.request)
 			if test.expectError == "" && err != nil {
 				t.Errorf("unexpected error: %v", err)
 			} else if test.expectError != "" && err == nil {

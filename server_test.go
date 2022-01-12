@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -35,14 +36,58 @@ var (
 	}
 )
 
+type dummyClientStream struct{}
+
+func (dummyClientStream) Header() (metadata.MD, error) { return nil, nil }
+func (dummyClientStream) Trailer() metadata.MD         { return nil }
+func (dummyClientStream) CloseSend() error             { return nil }
+func (dummyClientStream) Context() context.Context     { return context.Background() }
+func (dummyClientStream) SendMsg(interface{}) error    { return nil }
+func (dummyClientStream) RecvMsg(interface{}) error    { return nil }
+
+type dummyPKC struct {
+	run int
+	grpc.ClientStream
+}
+
+func (d *dummyPKC) Recv() (*server.PublicKeyValue, error) {
+	if d.run > 0 {
+		return nil, io.EOF
+	}
+
+	d.run++
+	return &server.PublicKeyValue{Value: "key-1"}, nil
+}
+
+type dummySC struct {
+	run int
+	grpc.ClientStream
+}
+
+func (d *dummySC) Recv() (*server.MessageWrapper, error) {
+	if d.run > 0 {
+		return nil, io.EOF
+	}
+
+	d.run++
+	return &server.MessageWrapper{}, nil
+}
+
+type Messaging_SubscribeClient interface {
+	Recv() (*server.MessageWrapper, error)
+	grpc.ClientStream
+}
+
 type dummyMessagingClient struct{}
 
 func (d dummyMessagingClient) Subscribe(context.Context, *emptypb.Empty, ...grpc.CallOption) (server.Messaging_SubscribeClient, error) {
-	return nil, nil
+	return &dummySC{0, dummyClientStream{}}, nil
 }
+
 func (d dummyMessagingClient) PublicKey(context.Context, *server.Auth, ...grpc.CallOption) (server.Messaging_PublicKeyClient, error) {
-	return nil, nil
+	return &dummyPKC{0, dummyClientStream{}}, nil
 }
+
 func (d dummyMessagingClient) Send(context.Context, *server.MessageWrapper, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
