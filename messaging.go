@@ -57,6 +57,23 @@ func (s Server) Send(ctx context.Context, in *server.MessageWrapper) (out *empty
 		return
 	}
 
+	// if in.For is set, does Sender have permission to post
+	// to this group?
+	if in.For != "" {
+		if !groupRegexp.Match([]byte(in.For)) {
+			// in.For can only be used for groups
+			err = inputError
+
+			return
+		}
+
+		if !HasPermission(User{Id: m.Recipient.Id}, Group{Id: in.For}, groupPost) {
+			err = badGroupError
+
+			return
+		}
+	}
+
 	msg := mwToBytes(in)
 	err = s.redis.WriteMessage(m.Recipient.Id, msg)
 

@@ -239,7 +239,11 @@ func (s Server) validateSender(req interface{}, m *Metadata) (err error) {
 		sender = v.Sender
 
 	case *server.GroupUser:
-		sender = v.UserId
+		if m.Sender.IsLocal {
+			sender = m.Sender.Id
+		} else {
+			sender = v.For
+		}
 
 		// Anything else is unfederated, so trust whatever we get from
 		// reading tokens
