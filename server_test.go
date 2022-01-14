@@ -85,7 +85,7 @@ func (d dummyMessagingClient) Subscribe(context.Context, *emptypb.Empty, ...grpc
 	return &dummySC{0, dummyClientStream{}}, nil
 }
 
-func (d dummyMessagingClient) PublicKey(context.Context, *server.Auth, ...grpc.CallOption) (server.Messaging_PublicKeyClient, error) {
+func (d dummyMessagingClient) PublicKey(context.Context, *server.Auth, ...grpc.CallOption) (server.User_PublicKeyClient, error) {
 	return &dummyPKC{0, dummyClientStream{}}, nil
 }
 
@@ -99,22 +99,22 @@ func (dummyGroupsClient) Create(context.Context, *server.Group, ...grpc.CallOpti
 	return nil, nil
 }
 
-func (dummyGroupsClient) Join(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (dummyGroupsClient) Join(context.Context, *server.JoinRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
-func (dummyGroupsClient) Info(context.Context, *server.GroupUser, ...grpc.CallOption) (*server.Group, error) {
+func (dummyGroupsClient) Info(context.Context, *server.InfoRequest, ...grpc.CallOption) (*server.Group, error) {
 	return new(server.Group), nil
 }
-func (dummyGroupsClient) Invite(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (dummyGroupsClient) Invite(context.Context, *server.InviteRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
-func (dummyGroupsClient) PromoteUser(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (dummyGroupsClient) PromoteUser(context.Context, *server.PromoteRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
-func (dummyGroupsClient) DemoteUser(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (dummyGroupsClient) DemoteUser(context.Context, *server.DemoteRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
-func (dummyGroupsClient) Leave(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (dummyGroupsClient) Leave(context.Context, *server.LeaveRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
 
@@ -133,7 +133,7 @@ func newTestServer(r Redis) (s Server) {
 		UnimplementedAuthenticationServer: server.UnimplementedAuthenticationServer{},
 		UnimplementedGroupsServer:         server.UnimplementedGroupsServer{},
 		UnimplementedMessagingServer:      server.UnimplementedMessagingServer{},
-		UnimplementedSelfServer:           server.UnimplementedSelfServer{},
+		UnimplementedUserServer:           server.UnimplementedUserServer{},
 		redis:                             r,
 		config:                            config,
 	}
@@ -150,7 +150,7 @@ func newTestServer(r Redis) (s Server) {
 	server.RegisterAuthenticationServer(grpcServer, s)
 	server.RegisterGroupsServer(grpcServer, s)
 	server.RegisterMessagingServer(grpcServer, s)
-	server.RegisterSelfServer(grpcServer, s)
+	server.RegisterUserServer(grpcServer, s)
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {

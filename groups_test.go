@@ -81,8 +81,7 @@ func TestServer_Join(t *testing.T) {
 
 			client := newTestGroupsClient()
 
-			_, err := client.Join(key(test.key).Auth(), &server.GroupUser{
-				UserId:  "some-user@testing",
+			_, err := client.Join(key(test.key).Auth(), &server.JoinRequest{
 				GroupId: test.group,
 			})
 			if test.expectError && err == nil {
@@ -105,7 +104,6 @@ func TestServer_Invite(t *testing.T) {
 		name        string
 		key         string
 		user        string
-		behalfOf    string
 		group       string
 		mocks       func(*redigomock.Conn)
 		expectError bool
@@ -117,10 +115,9 @@ func TestServer_Invite(t *testing.T) {
 
 			client := newTestGroupsClient()
 
-			_, err := client.Invite(key(test.key).Auth(), &server.GroupUser{
-				UserId:  test.user,
+			_, err := client.Invite(key(test.key).Auth(), &server.InviteRequest{
+				Invitee: test.user,
 				GroupId: test.group,
-				For:     test.behalfOf,
 			})
 			if test.expectError && err == nil {
 				t.Error("expected error")
@@ -157,8 +154,7 @@ func TestServer_Info(t *testing.T) {
 
 			client := newTestGroupsClient()
 
-			_, err := client.Info(key(test.key).Auth(), &server.GroupUser{
-				UserId:  "some-user@testing",
+			_, err := client.Info(key(test.key).Auth(), &server.InfoRequest{
 				GroupId: test.group,
 			})
 			if test.expectError && err == nil {

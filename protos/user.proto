@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+import "auth.proto";
+import "messaging.proto";
+
+option go_package = "github.com/prattle-chat/prattle-proxy/server";
+
+package user;
+
+// User contains a set of namespaced endpoints which provide
+// light-touch operations around user management.
+//
+// These endpoints require a bearer token from Auth.Token
+service User {
+  // AddPublicKey adds a new public key for a user. A user can have up to n public
+  // keys, where n is configured on the proxy.
+  //
+  // Where n is too few, a user is limited by the number of clients they can connect
+  // with.
+  // Where n is too high, the cost of sending a user a message becomes high, as does
+  // receiving _for_ that user
+  rpc AddPublicKey(PublicKeyValue) returns (google.protobuf.Empty) {}
+
+  // DelPublicKey removes a Public Key from the calling user
+  rpc DelPublicKey(PublicKeyValue) returns (google.protobuf.Empty) {}
+
+  // Tokens returns a user's current tokens for audit/ removal
+  rpc Tokens(google.protobuf.Empty) returns (stream auth.TokenValue) {}
+
+  // DelToken invalidates a token for a user
+  rpc DelToken(auth.TokenValue) returns (google.protobuf.Empty) {}
+
+  // PublicKey retrieves the public keys of a user. This is a federated endpoint.
+  //
+  // A prattle implementation must accept and return valid keys:
+  //   1. When both the sender and recipient are on the same host
+  //   2. When the sender is on a federated peer and the recipient is on this host
+  //   3. When the sender is local and the recipient is peered
+  //   4. When both sender and recipient are peered
+  //
+  // Why case 4? Because when we send a message which on behalf of a group
+  // on a peered server, a case exists where our server is not peered directly
+  // the host that hosts another member of that same group. Thus, we wont be able
+  // to send a message which that user can read.
+  //
+  // Since we relay messages through the owner server of a group anyway, we must
+  // also do the same for keys
+  rpc PublicKey(PublicKeyRequest) returns (stream PublicKeyValue) {}
+}
+
+// PublicKey is used when looking up the relevant public keys for a user, especially
+// when looking up a user in a group
+message PublicKeyRequest {
+  messaging.Subject owner = 1;
+  string value = 2;
+}
+
+// PublicKey contains data associated with Public Keys
+message PublicKeyValue {
+  string value = 1;
+  string user_id = 2;
+}

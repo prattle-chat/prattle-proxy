@@ -1,8 +1,8 @@
 SERVER_DIR := server
 GRPC_FILES := $(SERVER_DIR)/auth.pb.go             \
 	      $(SERVER_DIR)/auth_grpc.pb.go        \
-	      $(SERVER_DIR)/self.pb.go             \
-	      $(SERVER_DIR)/self_grpc.pb.go        \
+	      $(SERVER_DIR)/user.pb.go             \
+	      $(SERVER_DIR)/user_grpc.pb.go        \
 	      $(SERVER_DIR)/messaging.pb.go        \
 	      $(SERVER_DIR)/messaging_grpc.pb.go   \
 	      $(SERVER_DIR)/group.pb.go            \

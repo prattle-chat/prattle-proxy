@@ -5,8 +5,13 @@ import (
 	"strings"
 
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
+	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
 	"github.com/prattle-chat/prattle-proxy/server"
 	"google.golang.org/grpc"
+)
+
+var (
+	operatorIDHeader = "operator_id"
 )
 
 /**
@@ -32,8 +37,17 @@ type Actor struct {
 }
 
 type Metadata struct {
-	Sender    Actor
-	Recipient Actor
+	// Operator is the Actor performing an operation. This is derived using one of the following:
+	//
+	//    1. On calls where the bearer token matches a valid local user, the valid user becomes
+	//       the operator
+	//    2. On calls where the bearer token matches a valid peer, the valid user is taken from
+	//       the incoming context
+	Operator Actor
+
+	// Operand is the entity being Operated on, such as a user (when sending a message, say or
+	// retrieving a public key), or a group (when performing group operations).
+	Operand Actor
 }
 
 type wrappedStream struct {
@@ -72,7 +86,7 @@ func (s Server) FederatedEndpointUnaryInterceptor(ctx context.Context, req inter
 			return
 		}
 
-		err = s.validateSender(req, m)
+		err = s.validateOperator(req, m)
 		if err != nil {
 			return
 		}
@@ -86,15 +100,15 @@ func (s Server) FederatedEndpointUnaryInterceptor(ctx context.Context, req inter
 			break
 		}
 
-		err = s.validateRecipient(req, m)
+		err = s.validateOperand(req, m)
 		if err != nil {
 			return
 		}
 
-	case "/self.Self/AddPublicKey",
-		"/self.Self/DelPublicKey",
-		"/self.Self/DelToken",
-		"/self.Self/Tokens":
+	case "/user.User/AddPublicKey",
+		"/user.User/DelPublicKey",
+		"/user.User/DelToken",
+		"/user.User/Tokens":
 
 		// There's no federation on these requests; ensure that the
 		// calling user exists on our end and then done
@@ -139,7 +153,7 @@ func (s Server) FederatedEndpointStreamInterceptor(srv interface{}, ss grpc.Serv
 	}
 
 	switch info.FullMethod {
-	case "/messaging.Messaging/PublicKey":
+	case "/user.User/PublicKey":
 		// If auth is happy at this point, then I'm happy /shrug
 
 	case "/messaging.Messaging/Subscribe":
@@ -147,7 +161,7 @@ func (s Server) FederatedEndpointStreamInterceptor(srv interface{}, ss grpc.Serv
 		// - I have no idea what would happen if a federated peer
 		// tried to subscribe to messages on another prattle server.
 		// I *do* know, however, that it would be unexpected
-		if !m.Sender.IsLocal {
+		if !m.Operator.IsLocal {
 			err = inputError
 
 			return
@@ -203,7 +217,7 @@ func (s Server) auth(ctx context.Context, m *Metadata) (token string, err error)
 			return
 		}
 
-		m.Sender = Actor{
+		m.Operator = Actor{
 			Id:      id,
 			IsLocal: true,
 		}
@@ -220,7 +234,16 @@ func (s Server) auth(ctx context.Context, m *Metadata) (token string, err error)
 		return
 	}
 
-	m.Sender = Actor{
+	// get operator_id from incoming context
+	id = metautils.ExtractIncoming(ctx).Get(operatorIDHeader)
+	if id == "" {
+		err = inputError
+
+		return
+	}
+
+	m.Operator = Actor{
+		Id:      id,
 		IsLocal: false,
 		PeerConnection: &FederationWithDomain{
 			s.config.Federations[d],
@@ -231,86 +254,90 @@ func (s Server) auth(ctx context.Context, m *Metadata) (token string, err error)
 	return
 }
 
-func (s Server) validateSender(req interface{}, m *Metadata) (err error) {
-	var sender string
-
-	switch v := req.(type) {
-	case *server.MessageWrapper:
-		sender = v.Sender
-
-	case *server.GroupUser:
-		if m.Sender.IsLocal {
-			sender = m.Sender.Id
-		} else {
-			sender = v.For
-		}
-
-		// Anything else is unfederated, so trust whatever we get from
-		// reading tokens
-	default:
-		sender = m.Sender.Id
-	}
-
+func (s Server) validateOperator(req interface{}, m *Metadata) (err error) {
 	// All messages must contain a sender
-	if sender == "" {
+	if m.Operator.Id == "" {
 		return inputError
 	}
 
-	// If local, ensure that the sender matches the owner of
-	// the token, returning an error for any spoofed senders
-	if m.Sender.IsLocal {
-		if m.Sender.Id != sender {
-			err = mismatchedSenderError
+	// Ensure that, for messages, the sender matches the derived Operator ID
+	//
+	// This is the first step in validating a sender is entitled to send a message;
+	// Here we compare the OperatorID with the sender field of a MessageWrapper.
+	//
+	// A client, then, compares the sender field of the MessageWrapper with the encoded
+	// sender in the encrypted, embeded Message
+	switch v := req.(type) {
+	case *server.MessageWrapper:
+		if v.Sender == nil {
+			return inputError
 		}
 
+		if m.Operator.Id != v.Sender.Id {
+			return mismatchedSenderError
+		}
+	}
+
+	// Trust local operators; we've already validated them by
+	// loading the token from redis
+	if m.Operator.IsLocal {
 		return
 	}
 
 	// If from a peer, ensure the sender domain is at least correct
 	// and trust that the sender has at least validated that the sender
 	// and tokens are correct
-	d, err := domain(sender)
+	d, err := domain(m.Operator.Id)
 	if err != nil {
 		err = inputError
 
 		return
 	}
 
-	if m.Sender.PeerConnection.Domain != d {
+	if m.Operator.PeerConnection.Domain != d {
 		return mismatchedDomainError
 	}
-
-	// Finally, fill in the Sender ID (which we can't do in auth like
-	// we would with a local sender ID); if we get this far then we trust
-	// this value
-	m.Sender.Id = sender
 
 	return
 }
 
-func (s Server) validateRecipient(req interface{}, m *Metadata) (err error) {
+func (s Server) validateOperand(req interface{}, m *Metadata) (err error) {
 	var recipient string
 	switch v := req.(type) {
 	case *server.MessageWrapper:
-		recipient = v.Recipient
+		if v.Recipient == nil {
+			return inputError
+		}
 
-	case *server.GroupUser:
+		recipient = v.Recipient.Id
+
+	case *server.JoinRequest:
 		recipient = v.GroupId
 
-	case *server.Group:
-		recipient = v.Id
+	case *server.InfoRequest:
+		recipient = v.GroupId
+
+	case *server.LeaveRequest:
+		recipient = v.GroupId
+
+	case *server.InviteRequest:
+		recipient = v.GroupId
+
+	case *server.PromoteRequest:
+		recipient = v.GroupId
+
+	case *server.DemoteRequest:
+		recipient = v.GroupId
 
 	default:
-		err = inputError
-
-		return
+		return inputError
 	}
 
 	if recipient == "" {
 		return inputError
 	}
 
-	m.Recipient = Actor{
+	m.Operand = Actor{
 		Id: recipient,
 	}
 
@@ -323,7 +350,7 @@ func (s Server) validateRecipient(req interface{}, m *Metadata) (err error) {
 	}
 
 	if d == s.config.DomainName {
-		m.Recipient.IsLocal = true
+		m.Operand.IsLocal = true
 
 		return
 	}
@@ -336,11 +363,11 @@ func (s Server) validateRecipient(req interface{}, m *Metadata) (err error) {
 		return
 	}
 
-	m.Recipient.PeerConnection = &FederationWithDomain{
+	m.Operand.PeerConnection = &FederationWithDomain{
 		pc,
 		d,
 	}
-	m.Recipient.IsLocal = false
+	m.Operand.IsLocal = false
 
 	return
 }

@@ -17,7 +17,7 @@ func (s Server) Subscribe(_ *emptypb.Empty, ss server.Messaging_SubscribeServer)
 		out *server.MessageWrapper
 	)
 
-	for msg := range s.redis.Messages(m.Sender.Id) {
+	for msg := range s.redis.Messages(m.Operator.Id) {
 		buf = bytes.NewBuffer(msg)
 		dec := gob.NewDecoder(buf)
 
@@ -31,10 +31,11 @@ func (s Server) Subscribe(_ *emptypb.Empty, ss server.Messaging_SubscribeServer)
 			return generalError
 		}
 	}
+
 	return nil
 }
 
-// Send accepts a message for a user and either proxies it to the correct server,
+// Send accepts a message for a user and either relays it to the correct server,
 // or passes it to a user, depending on whether the user is peered or local (respectively).
 //
 // This endpoint will error if the user is a group; clients should encrypt and send messages
@@ -42,32 +43,42 @@ func (s Server) Subscribe(_ *emptypb.Empty, ss server.Messaging_SubscribeServer)
 // group name.
 func (s Server) Send(ctx context.Context, in *server.MessageWrapper) (out *emptypb.Empty, err error) {
 	m := ctx.Value(MetadataKey{}).(*Metadata)
+	recipient := m.Operand
 
-	if groupRegexp.Match([]byte(m.Recipient.Id)) {
+	// Sending directly to a group wont work, since there's nothing
+	// subscribed to that channel
+	if groupRegexp.Match([]byte(recipient.Id)) {
 		err = inputError
 
 		return
 	}
 
 	out = new(emptypb.Empty)
-	if !m.Recipient.IsLocal {
-		in.Sender = m.Sender.Id
-		err = m.Recipient.PeerConnection.Send(in)
+
+	// If the recipient is remote, send to that proxy
+	if !recipient.IsLocal {
+		err = recipient.PeerConnection.Send(m.Operator.Id, in)
 
 		return
 	}
 
-	// if in.For is set, does Sender have permission to post
-	// to this group?
-	if in.For != "" {
-		if !groupRegexp.Match([]byte(in.For)) {
-			// in.For can only be used for groups
+	// If we're sending on behalf of a group, have we permission to do so?
+	if in.Recipient.GroupId != "" {
+		if !groupRegexp.Match([]byte(in.Recipient.GroupId)) {
+			// check that it *is* a group
 			err = inputError
 
 			return
 		}
 
-		if !HasPermission(User{Id: m.Recipient.Id}, Group{Id: in.For}, groupPost) {
+		// Load group (including from remote)
+		var g Group
+		g, err = s.loadGroup(m.Operator.Id, in.Recipient.GroupId)
+		if err != nil {
+			return
+		}
+
+		if !HasPermission(User{Id: m.Operator.Id}, g, groupPost) {
 			err = badGroupError
 
 			return
@@ -75,57 +86,9 @@ func (s Server) Send(ctx context.Context, in *server.MessageWrapper) (out *empty
 	}
 
 	msg := mwToBytes(in)
-	err = s.redis.WriteMessage(m.Recipient.Id, msg)
+	err = s.redis.WriteMessage(recipient.Id, msg)
 
 	return
-}
-
-// PublicKey returns the public keys associated with a user.
-//
-// Trying to load keys associated with a group will return an error; clients
-// should maintain a store of individual user keys
-//
-// This function accepts either a local user, or a user for a peered
-// server.
-func (s Server) PublicKey(in *server.Auth, pks server.Messaging_PublicKeyServer) (err error) {
-	if groupRegexp.Match([]byte(in.UserId)) {
-		return inputError
-	}
-
-	d, err := domain(in.UserId)
-	if err != nil {
-		return inputError
-	}
-
-	if d == s.config.DomainName {
-		var u User
-
-		u, err = s.redis.loadUser(in.UserId)
-		if err != nil {
-			return
-		}
-
-		for _, k := range u.PublicKeys {
-			err = pks.Send(&server.PublicKeyValue{
-				Value: k,
-			})
-
-			if err != nil {
-				err = generalError
-
-				return
-			}
-		}
-
-		return
-	}
-
-	peer, ok := s.config.Federations[d]
-	if !ok {
-		return notPeeredError
-	}
-
-	return peer.PublicKey(in, pks)
 }
 
 func mwToBytes(mw *server.MessageWrapper) []byte {
