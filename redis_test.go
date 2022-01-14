@@ -105,6 +105,16 @@ func validPeeredToPeered(conn *redigomock.Conn) {
 		Expect([]byte(""))
 }
 
+func validPeeredNoPermission(conn *redigomock.Conn) {
+	validPeeredToPeered(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":     "g:open@testing",
+			"IsOpen": "1",
+		})
+}
+
 func createSubscriptionMessage(channel string, data []byte) []interface{} {
 	values := []interface{}{}
 	values = append(values, interface{}([]byte("message")))
@@ -146,7 +156,7 @@ func validPeerReceiveMessage(conn *redigomock.Conn) {
 func validPasswordCreateUser(conn *redigomock.Conn) {
 	conn.Clear()
 	conn.Command("HGETALL", "some-user@testing").
-		Expect([]byte(""))
+		ExpectMap(map[string]string{})
 
 	conn.GenericCommand("HSET").
 		Expect([]byte("ok"))
@@ -166,7 +176,7 @@ func idFound(conn *redigomock.Conn) {
 func userCreateError(conn *redigomock.Conn) {
 	conn.Clear()
 	conn.Command("HGETALL", "some-user@testing").
-		Expect([]byte(""))
+		ExpectMap(map[string]string{})
 
 	conn.GenericCommand("HSET").
 		ExpectError(fmt.Errorf("an error"))
@@ -175,7 +185,7 @@ func userCreateError(conn *redigomock.Conn) {
 func noSuchUser(conn *redigomock.Conn) {
 	conn.Clear()
 	conn.Command("HGETALL", "some-user@testing").
-		Expect([]byte(""))
+		ExpectMap(map[string]string{})
 }
 
 func validUser(conn *redigomock.Conn) {
@@ -199,6 +209,177 @@ func addToken(conn *redigomock.Conn) {
 	validUser(conn)
 	conn.GenericCommand("HSET").
 		Expect([]byte("ok"))
+}
+
+func groupIdFound(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	for i := 0; i < 10; i++ {
+		conn.Command("HGETALL", "g:some-user@testing").
+			ExpectMap(map[string]string{
+				"Id": "g:some-user@testing",
+			})
+	}
+}
+
+func groupIdLookupErrors(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:some-user@testing").
+		ExpectError(fmt.Errorf("an error"))
+}
+
+func groupAddError(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:some-user@testing").
+		ExpectMap(map[string]string{})
+
+	conn.GenericCommand("HSET").
+		ExpectError(fmt.Errorf("an error"))
+
+}
+
+func groupAddSuccess(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:some-user@testing").
+		ExpectMap(map[string]string{})
+
+	conn.GenericCommand("HSET")
+}
+
+func closedGroup(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:closed@testing").
+		ExpectMap(map[string]string{
+			"Id":     "g:closed@testing",
+			"IsOpen": "0",
+		})
+}
+
+func missingGroup(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:closed@testing").
+		ExpectMap(map[string]string{})
+}
+
+func validGroup(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":      "g:open@testing",
+			"IsOpen":  "1",
+			"Members": `["some-user@testing"]`,
+			"Owners":  "[]",
+		})
+}
+
+func validGroupAndInvitee(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":      "g:open@testing",
+			"IsOpen":  "1",
+			"Members": `["some-user@testing"]`,
+			"Owners":  "[]",
+		})
+
+	conn.Command("HGETALL", "another-user@testing").
+		ExpectMap(map[string]string{
+			"Id": "another-user@testing",
+		})
+}
+
+func validGroupWithMember(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":      "g:open@testing",
+			"IsOpen":  "1",
+			"Members": `["some-user@testing"]`,
+			"Owners":  `["some-user@testing"]`,
+		})
+}
+
+func groupJoinOnErroringGroup(conn *redigomock.Conn) {
+	validGroup(conn)
+
+	conn.GenericCommand("HSET").
+		ExpectError(fmt.Errorf("an error"))
+}
+
+func groupJoinSuccess(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validGroup(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":      "g:open@testing",
+			"IsOpen":  "1",
+			"Members": `[]`,
+			"Owners":  `["some-user@testing"]`,
+		})
+
+	conn.GenericCommand("HSET")
+}
+
+func groupInviteeNotExist(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":      "g:open@testing",
+			"IsOpen":  "1",
+			"Members": `["some-user@testing"]`,
+			"Owners":  `["some-user@testing"]`,
+		})
+
+	conn.Command("HGETALL", "another-user@testing").
+		ExpectMap(map[string]string{})
+}
+
+func remoteUserAddSuccess(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validPeeredToPeered(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":      "g:open@testing",
+			"IsOpen":  "1",
+			"Members": `[]`,
+			"Owners":  `["some-user@testing", "some-user@none"]`,
+		})
+
+	conn.GenericCommand("HSET")
+
 }
 
 func NewDummyRedis(c *redigomock.Conn) (r Redis) {

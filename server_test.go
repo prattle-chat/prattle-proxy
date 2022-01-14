@@ -26,6 +26,7 @@ var (
 			"none": {
 				PSK:       "blahblahblah",
 				messaging: dummyMessagingClient{},
+				group:     dummyGroupsClient{},
 			},
 		},
 	}
@@ -89,6 +90,31 @@ func (d dummyMessagingClient) PublicKey(context.Context, *server.Auth, ...grpc.C
 }
 
 func (d dummyMessagingClient) Send(context.Context, *server.MessageWrapper, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+
+type dummyGroupsClient struct{}
+
+func (dummyGroupsClient) Create(context.Context, *server.Group, ...grpc.CallOption) (*server.Group, error) {
+	return nil, nil
+}
+
+func (dummyGroupsClient) Join(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+func (dummyGroupsClient) Info(context.Context, *server.GroupUser, ...grpc.CallOption) (*server.Group, error) {
+	return new(server.Group), nil
+}
+func (dummyGroupsClient) Invite(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+func (dummyGroupsClient) PromoteUser(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+func (dummyGroupsClient) DemoteUser(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+func (dummyGroupsClient) Leave(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
 

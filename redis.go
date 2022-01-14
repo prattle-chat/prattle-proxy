@@ -162,7 +162,15 @@ func (r Redis) GetPasswordHash(id string) (s string, err error) {
 func (r Redis) IDExists(id string) bool {
 	u, err := r.loadUser(id)
 
-	return err == nil && u.Id != ""
+	log.Print(err)
+
+	// Treat errors the same as a key existing; it's better
+	// to force the client to retry at this point
+	if err != nil {
+		return true
+	}
+
+	return u.Id != ""
 }
 
 func (r Redis) UserIdByToken(token string) (id string, err error) {

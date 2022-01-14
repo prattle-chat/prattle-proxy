@@ -25,6 +25,7 @@ var (
 	badPasswordError  = status.Error(codes.Unauthenticated, "incorrect password or userid")
 
 	badGroupError  = status.Error(codes.NotFound, "group could not be found")
+	badUserError   = status.Error(codes.NotFound, "user could not be found")
 	notPeeredError = status.Error(codes.NotFound, "recipient is on a non-peered domain")
 
 	generalError = status.Error(codes.Unavailable, "an internal systems error occurred")
@@ -76,6 +77,27 @@ func (s Server) mintID() (id string, err error) {
 		if err != nil {
 			return
 		}
+
+		// test whether id is in use
+		if !s.redis.IDExists(id) {
+			return
+		}
+	}
+
+	// If we get this far then we couldn't get a fresh ID in
+	// ten tries, and so we have a problem somewhere
+	return "", generalError
+}
+
+func (s Server) mintGroupID() (id string, err error) {
+	// Try a maximum of ten times to mint an unknown ID
+	for i := 0; i < 10; i++ {
+		id, err = minter(s.config.DomainName)
+		if err != nil {
+			return
+		}
+
+		id = fmt.Sprintf(groupFormat, id)
 
 		// test whether id is in use
 		if !s.redis.IDExists(id) {
