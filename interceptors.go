@@ -69,12 +69,12 @@ func (s Server) FederatedEndpointUnaryInterceptor(ctx context.Context, req inter
 
 		_, err = s.auth(ctx, m)
 		if err != nil {
-			panic(err)
+			return
 		}
 
 		err = s.validateSender(req, m)
 		if err != nil {
-			panic(err)
+			return
 		}
 
 		// We can't test the recipient on group creation
@@ -88,7 +88,7 @@ func (s Server) FederatedEndpointUnaryInterceptor(ctx context.Context, req inter
 
 		err = s.validateRecipient(req, m)
 		if err != nil {
-			panic(err)
+			return
 		}
 
 	case "/self.Self/AddPublicKey",
@@ -180,7 +180,19 @@ func (s Server) auth(ctx context.Context, m *Metadata) (token string, err error)
 		var u User
 		u, err = s.redis.loadUser(id)
 		if err != nil || u.Id == "" {
-			err = inputError
+			// If we get here then we have an out-of-date token
+			// that doesn't point to a real user.
+			//
+			// In that case, delete the token so that the next call
+			// errors correctly
+			err = s.redis.DeleteToken(token)
+			if err != nil {
+				err = generalError
+
+				return
+			}
+
+			err = authError
 
 			return
 		}
@@ -221,37 +233,42 @@ func (s Server) auth(ctx context.Context, m *Metadata) (token string, err error)
 
 func (s Server) validateSender(req interface{}, m *Metadata) (err error) {
 	var sender string
-	if m.Sender.IsLocal {
-		sender = m.Sender.Id
-	} else {
-		switch v := req.(type) {
-		case *server.MessageWrapper:
-			sender = v.Sender
 
-		case *server.GroupUser:
-			sender = v.UserId
+	switch v := req.(type) {
+	case *server.MessageWrapper:
+		sender = v.Sender
+
+	case *server.GroupUser:
+		if m.Sender.IsLocal {
+			sender = m.Sender.Id
+		} else {
+			sender = v.For
+		}
 
 		// Anything else is unfederated, so trust whatever we get from
 		// reading tokens
-		default:
-			sender = m.Sender.Id
-		}
+	default:
+		sender = m.Sender.Id
 	}
 
-	// if local, ensure the relevant sender field matches
-	// the one taken from the token.
-	//
-	// otherwise, ensure the source domain matches the same
-	// domain in the request (and trust that the peer has already
-	// verified correct ownership
+	// All messages must contain a sender
+	if sender == "" {
+		return inputError
+	}
+
+	// If local, ensure that the sender matches the owner of
+	// the token, returning an error for any spoofed senders
 	if m.Sender.IsLocal {
-		if sender != m.Sender.Id {
-			err = inputError
+		if m.Sender.Id != sender {
+			err = mismatchedSenderError
 		}
 
 		return
 	}
 
+	// If from a peer, ensure the sender domain is at least correct
+	// and trust that the sender has at least validated that the sender
+	// and tokens are correct
 	d, err := domain(sender)
 	if err != nil {
 		err = inputError
@@ -259,10 +276,14 @@ func (s Server) validateSender(req interface{}, m *Metadata) (err error) {
 		return
 	}
 
-	m.Sender.Id = sender
 	if m.Sender.PeerConnection.Domain != d {
-		err = inputError
+		return mismatchedDomainError
 	}
+
+	// Finally, fill in the Sender ID (which we can't do in auth like
+	// we would with a local sender ID); if we get this far then we trust
+	// this value
+	m.Sender.Id = sender
 
 	return
 }
@@ -283,6 +304,10 @@ func (s Server) validateRecipient(req interface{}, m *Metadata) (err error) {
 		err = inputError
 
 		return
+	}
+
+	if recipient == "" {
+		return inputError
 	}
 
 	m.Recipient = Actor{

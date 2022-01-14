@@ -35,11 +35,21 @@ service Messaging {
 //
 // While the existence of the Sender field makes it easy to log and track who is sending
 // messages where, it does allow us to check permissions more easily, and it does allow
-// us to ensure senders are not spoofed in payloads
+// us to ensure senders are not spoofed in payloads.
+//
+// That being said, a user sending a message to another user on the same domain may omit
+// the Sender field; in this instance, the sender can be derived from the authentication
+// data associated with a user's token
+//
+// When sending a message to a user in a group, the field 'for' should be set the the
+// group name. It is the client's responsibility to match this field with the recipient
+// field in a decoded, decrypted 'Message' to ensure it matches the 'for' field when
+// the value of Message.Recipient is a group
 message MessageWrapper {
   string recipient = 1;
   string sender = 2;
   bytes encoded = 3;
+  string for = 4;
 }
 
 // Message holds a minimum amount of metadata for a message, plus arbitrary body.

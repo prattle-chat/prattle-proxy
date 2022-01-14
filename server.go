@@ -25,11 +25,38 @@ var (
 	badPasswordError  = status.Error(codes.Unauthenticated, "incorrect password or userid")
 
 	badGroupError  = status.Error(codes.NotFound, "group could not be found")
+	badUserError   = status.Error(codes.NotFound, "user could not be found")
 	notPeeredError = status.Error(codes.NotFound, "recipient is on a non-peered domain")
 
-	generalError = status.Error(codes.Unavailable, "an general error occurred")
+	generalError = status.Error(codes.Unavailable, "an internal systems error occurred")
 	inputError   = status.Error(codes.Unavailable, "missing/ poorly formed input")
+
+	mismatchedSenderError = status.Error(codes.InvalidArgument, "mismatch between sender field and owner of token")
+	mismatchedDomainError = status.Error(codes.InvalidArgument, "mismatch between sender domain and the domain this federated peer belongs to")
+
+	minter MinterFunc = func(d string) (string, error) {
+		words := diceware.MustGenerate(2)
+
+		suffix := make([]byte, 4)
+		_, err := rand.Read(suffix)
+		if err != nil {
+			return "", generalError
+		}
+
+		return fmt.Sprintf("%s-%s-%s@%s",
+			words[0],
+			words[1],
+			hex.EncodeToString(suffix),
+			d,
+		), err
+
+	}
 )
+
+// MinterFunc accepts a domain name, and returns a new
+// ID (and optional error) which can be used in both user
+// and group ID generation
+type MinterFunc func(string) (string, error)
 
 type MetadataKey struct{}
 
@@ -44,29 +71,43 @@ type Server struct {
 }
 
 func (s Server) mintID() (id string, err error) {
-	words := diceware.MustGenerate(2)
+	// Try a maximum of ten times to mint an unknown ID
+	for i := 0; i < 10; i++ {
+		id, err = minter(s.config.DomainName)
+		if err != nil {
+			return
+		}
 
-	suffix := make([]byte, 4)
-	_, err = rand.Read(suffix)
-	if err != nil {
-		err = generalError
-
-		return
+		// test whether id is in use
+		if !s.redis.IDExists(id) {
+			return
+		}
 	}
 
-	id = fmt.Sprintf("%s-%s-%s@%s",
-		words[0],
-		words[1],
-		hex.EncodeToString(suffix),
-		s.config.DomainName,
-	)
+	// If we get this far then we couldn't get a fresh ID in
+	// ten tries, and so we have a problem somewhere
+	return "", generalError
+}
 
-	// test whether id is in use
-	if s.redis.IDExists(id) {
-		return s.mintID()
+func (s Server) mintGroupID() (id string, err error) {
+	// Try a maximum of ten times to mint an unknown ID
+	for i := 0; i < 10; i++ {
+		id, err = minter(s.config.DomainName)
+		if err != nil {
+			return
+		}
+
+		id = fmt.Sprintf(groupFormat, id)
+
+		// test whether id is in use
+		if !s.redis.IDExists(id) {
+			return
+		}
 	}
 
-	return
+	// If we get this far then we couldn't get a fresh ID in
+	// ten tries, and so we have a problem somewhere
+	return "", generalError
 }
 
 func (s Server) mintToken() string {

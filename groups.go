@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 
 	"github.com/prattle-chat/prattle-proxy/server"
@@ -54,18 +53,18 @@ func (s Server) Create(ctx context.Context, in *server.Group) (out *server.Group
 		return
 	}
 
-	id, err := s.mintID()
+	gid, err := s.mintGroupID()
 	if err != nil {
 		err = generalError
 
 		return
 	}
 
-	gid := fmt.Sprintf(groupFormat, id)
-
 	err = s.redis.AddGroup(gid, m.Sender.Id, in.IsOpen, in.IsBroadcast)
 	if err != nil {
 		err = generalError
+
+		return
 	}
 
 	out = in
@@ -83,9 +82,16 @@ func (s Server) Join(ctx context.Context, in *server.GroupUser) (out *emptypb.Em
 	out = new(emptypb.Empty)
 
 	if m.Recipient.IsLocal {
-		err = s.redis.JoinGroup(in.GroupId, m.Sender.Id)
+		_, err = s.groupPermitted(in.GroupId, m.Sender.Id, groupJoin)
 		if err != nil {
-			err = inputError
+			return
+		}
+
+		if m.Sender.IsLocal {
+			err = s.redis.JoinGroup(in.GroupId, m.Sender.Id)
+			if err != nil {
+				err = inputError
+			}
 		}
 
 		return
@@ -106,16 +112,8 @@ func (s Server) Info(ctx context.Context, in *server.GroupUser) (out *server.Gro
 	if m.Recipient.IsLocal {
 		var g Group
 
-		g, err = s.redis.Group(m.Recipient.Id)
+		g, err = s.groupPermitted(in.GroupId, m.Sender.Id, groupRead)
 		if err != nil {
-			err = badGroupError
-
-			return
-		}
-
-		if !HasPermission(User{Id: m.Sender.Id}, g, groupRead) {
-			err = badGroupError
-
 			return
 		}
 
@@ -134,36 +132,25 @@ func (s Server) Info(ctx context.Context, in *server.GroupUser) (out *server.Gro
 	return m.Recipient.PeerConnection.GroupInfo(in)
 }
 
-// Invite is called by Group.Invite
+// Invite is called by Group.Invite.
+//
+// In this, the values of GroupUser mean:
+//
+//  1. GroupID - The group we're inviting a user to
+//  2. UserID  - The user we're inviting to the specified group
+//  3. For     - The user who is doing the inviting
+//
+// Thus, Metadata.Sender.Id should be the same as 'For' on incoming calls from
+// peers, and should be set on calls *to* peers
 func (s Server) Invite(ctx context.Context, in *server.GroupUser) (_ *emptypb.Empty, err error) {
 	m := ctx.Value(MetadataKey{}).(*Metadata)
 
 	if m.Recipient.IsLocal {
-		var g Group
-		g, err = s.redis.Group(m.Recipient.Id)
-		if err != nil {
-			err = badGroupError
-
-			return
-		}
-
-		if !HasPermission(User{Id: m.Sender.Id}, g, groupModify) {
-			err = badGroupError
-
-			return
-		}
-
-		if !contains(g.Members, in.UserId) {
-			g.Members = append(g.Members, in.UserId)
-			if err != nil {
-				err = inputError
-			}
-		}
-
-		return
+		return new(emptypb.Empty), nil
 	}
 
 	// External group
+	in.For = m.Sender.Id
 	return new(emptypb.Empty), m.Recipient.PeerConnection.InviteToGroup(in)
 }
 
@@ -171,28 +158,7 @@ func (s Server) PromoteUser(ctx context.Context, in *server.GroupUser) (_ *empty
 	m := ctx.Value(MetadataKey{}).(*Metadata)
 
 	if m.Recipient.IsLocal {
-		var g Group
-		g, err = s.redis.Group(m.Recipient.Id)
-		if err != nil {
-			err = badGroupError
-
-			return
-		}
-
-		if !HasPermission(User{Id: m.Sender.Id}, g, groupModify) {
-			err = badGroupError
-
-			return
-		}
-
-		if !contains(g.Owners, in.UserId) {
-			g.Owners = append(g.Owners, in.UserId)
-			if err != nil {
-				err = inputError
-			}
-		}
-
-		return
+		return new(emptypb.Empty), nil
 	}
 
 	// External group
@@ -203,43 +169,7 @@ func (s Server) DemoteUser(ctx context.Context, in *server.GroupUser) (_ *emptyp
 	m := ctx.Value(MetadataKey{}).(*Metadata)
 
 	if m.Recipient.IsLocal {
-		var g Group
-		g, err = s.redis.Group(m.Recipient.Id)
-		if err != nil {
-			err = badGroupError
-
-			return
-		}
-
-		if !HasPermission(User{Id: m.Sender.Id}, g, groupModify) {
-			err = badGroupError
-
-			return
-		}
-
-		switch {
-		case contains(g.Owners, in.UserId):
-			new := make(stringSlice, 0)
-			for _, u := range g.Owners {
-				if u != m.Recipient.Id {
-					new = append(new, u)
-				}
-			}
-
-			g.Owners = new
-
-		case contains(g.Members, in.UserId):
-			new := make(stringSlice, 0)
-			for _, u := range g.Members {
-				if u != m.Recipient.Id {
-					new = append(new, u)
-				}
-			}
-
-			g.Members = new
-		}
-
-		return
+		return new(emptypb.Empty), nil
 	}
 
 	// External group
@@ -250,48 +180,27 @@ func (s Server) LeaveGroup(ctx context.Context, in *server.GroupUser) (_ *emptyp
 	m := ctx.Value(MetadataKey{}).(*Metadata)
 
 	if m.Recipient.IsLocal {
-		var g Group
-		g, err = s.redis.Group(m.Recipient.Id)
-		if err != nil {
-			err = badGroupError
-
-			return
-		}
-
-		if !HasPermission(User{Id: m.Sender.Id}, g, groupLeave) {
-			err = badGroupError
-
-			return
-		}
-
-		switch {
-		case contains(g.Owners, in.UserId):
-			new := make(stringSlice, 0)
-			for _, u := range g.Owners {
-				if u != m.Recipient.Id {
-					new = append(new, u)
-				}
-			}
-
-			g.Owners = new
-
-		case contains(g.Members, in.UserId):
-			new := make(stringSlice, 0)
-			for _, u := range g.Members {
-				if u != m.Recipient.Id {
-					new = append(new, u)
-				}
-			}
-
-			g.Members = new
-		}
-
-		return
+		return new(emptypb.Empty), nil
 	}
 
 	// External group
 	in.UserId = m.Sender.Id
 	return new(emptypb.Empty), m.Recipient.PeerConnection.LeaveGroup(in)
+}
+
+func (s Server) groupPermitted(groupId, actorId string, op GroupOperation) (g Group, err error) {
+	g, err = s.redis.Group(groupId)
+	if err != nil {
+		err = badGroupError
+
+		return
+	}
+
+	if !HasPermission(User{Id: actorId}, g, op) {
+		err = badGroupError
+	}
+
+	return
 }
 
 func HasPermission(u User, g Group, o GroupOperation) bool {

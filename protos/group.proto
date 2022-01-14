@@ -52,7 +52,16 @@ message Group {
 
 // GroupUser is used on operations where a group ID and a user ID
 // is needed, such as invitations, booting users, etc.
+//
+// When a GroupUser message passes between peers, the field 'For' should
+// be set to the caller, as determined by the origin server; this is to
+// ensure that federated peers can determine whether an operation is
+// permitted.
+//
+// This does, of course, put a certain level of trust in the sanctity of
+// the peering connection.
 message GroupUser {
   string group_id = 1;
   string user_id = 2 ;
+  string for = 3;
 }

@@ -133,14 +133,12 @@ func (r Redis) GetPublicKeys(id string) ([]string, error) {
 }
 
 func (r Redis) MarkFinalised(id string) (err error) {
-	u, err := r.loadUser(id)
-	if err != nil {
-		return
-	}
+	c := r.pool.Get()
+	defer c.Close()
 
-	u.Finalised = true
+	_, err = c.Do("HSET", id, "Finalised", true)
 
-	return r.saveUser(u)
+	return
 }
 
 func (r Redis) GetTOTPSeed(id string) (s string, err error) {
@@ -164,7 +162,15 @@ func (r Redis) GetPasswordHash(id string) (s string, err error) {
 func (r Redis) IDExists(id string) bool {
 	u, err := r.loadUser(id)
 
-	return err == nil && u.Id != ""
+	log.Print(err)
+
+	// Treat errors the same as a key existing; it's better
+	// to force the client to retry at this point
+	if err != nil {
+		return true
+	}
+
+	return u.Id != ""
 }
 
 func (r Redis) UserIdByToken(token string) (id string, err error) {
@@ -186,6 +192,15 @@ func (r Redis) UserByToken(token string) (u User, err error) {
 	}
 
 	return r.loadUser(id)
+}
+
+func (r Redis) DeleteToken(token string) (err error) {
+	c := r.pool.Get()
+	defer c.Close()
+
+	_, err = c.Do("HDEL", tokenIDHMKey, token)
+
+	return
 }
 
 func (r Redis) Messages(id string) chan []byte {
