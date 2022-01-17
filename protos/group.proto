@@ -15,33 +15,37 @@ package group;
 // A group can also be a broadcast group, which means only owners can
 // send messages
 service Groups {
-    // CreateGroup will create a group, setting the calling user as owner
+  // CreateGroup will create a group, setting the calling user as owner.
+  //
+  // This call is not federated; a user can only create a group on the
+  // server their account is hosted on
   rpc Create(Group) returns (Group) {}
 
-  // Join will
-  rpc Join(GroupUser) returns (google.protobuf.Empty) {}
+  // Join accepts a group_id (and, when from a federared peer, a joiner)
+  // and tries to add a user to the members list of that group
+  rpc Join(JoinRequest) returns (google.protobuf.Empty) {}
 
   // Group returns information about a group, such as owners and members
-  rpc Info(GroupUser) returns (Group) {}
+  rpc Info(InfoRequest) returns (Group) {}
 
   // InviteToGroup allows group owners to invite users to a group
-  rpc Invite(GroupUser) returns (google.protobuf.Empty) {}
+  rpc Invite(InviteRequest) returns (google.protobuf.Empty) {}
 
   // PromoteUser allows a group owner to make another user an owner
-  rpc PromoteUser(GroupUser) returns (google.protobuf.Empty) {}
+  rpc PromoteUser(PromoteRequest) returns (google.protobuf.Empty) {}
 
   // DemoteUser allows a group owner to demote another owner to
   // regular user, or to boot a regular user from the group
-  rpc DemoteUser(GroupUser) returns (google.protobuf.Empty) {}
+  rpc DemoteUser(DemoteRequest) returns (google.protobuf.Empty) {}
 
   // LeaveGroup allows a user to leave a group
-  rpc Leave(GroupUser) returns (google.protobuf.Empty) {}
+  rpc Leave(LeaveRequest) returns (google.protobuf.Empty) {}
 }
 
-// Group is used for most group operations, such as:
+// Group is used for creating and reading groups; with the following caveats:
 //
-//   1. Creating a group (note: ID is ignored; IDs are generated)
-//   2. Viewing group info
+//    1. The ID field is ignored when creating a new group; group IDs are
+//       minted serverside (in much the same way user IDs are)
 message Group {
   string id = 1;
   repeated string owners = 2;
@@ -50,18 +54,58 @@ message Group {
   bool is_broadcast = 5;
 }
 
-// GroupUser is used on operations where a group ID and a user ID
-// is needed, such as invitations, booting users, etc.
-//
-// When a GroupUser message passes between peers, the field 'For' should
-// be set to the caller, as determined by the origin server; this is to
-// ensure that federated peers can determine whether an operation is
-// permitted.
-//
-// This does, of course, put a certain level of trust in the sanctity of
-// the peering connection.
-message GroupUser {
+// JoinRequest is used to join a group. Clients need only set
+// the value of group_id. When a prattle server relays a JoinRequest
+// to a peer, the relaying server must set the value of joiner to
+// the ID of the originator of the call
+message JoinRequest {
   string group_id = 1;
-  string user_id = 2 ;
-  string for = 3;
+  string joiner = 2;
+}
+
+// InfoRequest is used to retrieve a group. Clients need only set
+// the value of group_id. When a prattle server relays an InfoRequest
+// to a peer, the relaying server must set the value of requester to
+// the ID of the originator of the call
+message InfoRequest {
+  string group_id = 1;
+}
+
+// LeaveRequest is used to leave a group. Clients need only set
+// the value of group_id. When a prattle server relays an LeaveRequest
+// to a peer, the relaying server must set the value of leaver to
+// the ID of the originator of the call
+message LeaveRequest {
+  string group_id = 1;
+  string leaver = 2;
+}
+
+// InviteRequest is used to invite a user (the invitee) to a group.
+message InviteRequest {
+  string group_id = 1;
+  string invitee = 2;
+}
+
+// PromoteRequest is used to promote a user (the promotee) within a group,
+// from a normal member to a owner
+//
+// The value of `promoter` is ignored when an invitation request comes
+// from a non-peered connection. It is the responsibility of the server
+// which recieves that first, non-peered/ relayed, request to set the
+// promoter field to the originator of the call
+message PromoteRequest {
+  string group_id = 1;
+  string promotee = 2;
+}
+
+// DemoteRequest is used to demote a user (the demotee) to a group,
+// from owner -> normal user, and normal user -> booted
+//
+// The value of `demoter` is ignored when an invitation request comes
+// from a non-peered connection. It is the responsibility of the server
+// which recieves that first, non-peered/ relayed, request to set the
+// demoter field to the originator of the call
+message DemoteRequest {
+  string group_id = 1;
+  string demotee = 2;
 }

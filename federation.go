@@ -30,6 +30,10 @@ type Federation struct {
 	// group holds a gRPC connection to this federated prattle
 	// instance on the groups namespace
 	group server.GroupsClient
+
+	// user holds a gRPC connection to this federated prattle
+	// instance on the user namespace
+	user server.UserClient
 }
 
 func (f *Federation) connect() (err error) {
@@ -45,25 +49,28 @@ func (f *Federation) connect() (err error) {
 	return
 }
 
-func (f Federation) auth() (ctx context.Context) {
+func (f Federation) auth(id string) (ctx context.Context) {
 	ctx = context.Background()
 
-	md := metadata.New(map[string]string{"authorization": fmt.Sprintf("bearer %s", f.PSK)})
+	md := metadata.New(map[string]string{
+		"authorization":  fmt.Sprintf("bearer %s", f.PSK),
+		operatorIDHeader: id,
+	})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	return
 }
 
 // Send proxies a message to a federated connection
-func (f Federation) Send(mw *server.MessageWrapper) (err error) {
-	_, err = f.messaging.Send(f.auth(), mw)
+func (f Federation) Send(id string, mw *server.MessageWrapper) (err error) {
+	_, err = f.messaging.Send(f.auth(id), mw)
 
 	return
 }
 
 // PubicKey proxies a PublicKey request to a peered prattle
-func (f Federation) PublicKey(in *server.Auth, pks server.Messaging_PublicKeyServer) (err error) {
-	kc, err := f.messaging.PublicKey(f.auth(), in)
+func (f Federation) PublicKey(in *server.PublicKeyRequest, pks server.User_PublicKeyServer) (err error) {
+	kc, err := f.user.PublicKey(f.auth("skipped-open-request"), in)
 	if err != nil {
 		return
 	}
@@ -90,36 +97,36 @@ func (f Federation) PublicKey(in *server.Auth, pks server.Messaging_PublicKeySer
 	return
 }
 
-func (f Federation) JoinGroup(in *server.GroupUser) (err error) {
-	_, err = f.group.Join(f.auth(), in)
+func (f Federation) JoinGroup(id string, in *server.JoinRequest) (err error) {
+	_, err = f.group.Join(f.auth(id), in)
 
 	return
 }
 
-func (f Federation) GroupInfo(in *server.GroupUser) (out *server.Group, err error) {
-	return f.group.Info(f.auth(), in)
+func (f Federation) GroupInfo(id string, in *server.InfoRequest) (out *server.Group, err error) {
+	return f.group.Info(f.auth(id), in)
 }
 
-func (f Federation) InviteToGroup(in *server.GroupUser) (err error) {
-	_, err = f.group.Invite(f.auth(), in)
+func (f Federation) InviteToGroup(id string, in *server.InviteRequest) (err error) {
+	_, err = f.group.Invite(f.auth(id), in)
 
 	return
 }
 
-func (f Federation) PromoteUser(in *server.GroupUser) (err error) {
-	_, err = f.group.PromoteUser(f.auth(), in)
+func (f Federation) PromoteUser(id string, in *server.PromoteRequest) (err error) {
+	_, err = f.group.PromoteUser(f.auth(id), in)
 
 	return
 }
 
-func (f Federation) DemoteUser(in *server.GroupUser) (err error) {
-	_, err = f.group.DemoteUser(f.auth(), in)
+func (f Federation) DemoteUser(id string, in *server.DemoteRequest) (err error) {
+	_, err = f.group.DemoteUser(f.auth(id), in)
 
 	return
 }
 
-func (f Federation) LeaveGroup(in *server.GroupUser) (err error) {
-	_, err = f.group.DemoteUser(f.auth(), in)
+func (f Federation) LeaveGroup(id string, in *server.LeaveRequest) (err error) {
+	_, err = f.group.Leave(f.auth(id), in)
 
 	return
 }

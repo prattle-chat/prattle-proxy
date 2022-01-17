@@ -3,9 +3,6 @@ syntax = "proto3";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
-import "auth.proto";
-import "self.proto";
-
 option go_package = "github.com/prattle-chat/prattle-proxy/server";
 
 package messaging;
@@ -16,15 +13,16 @@ package messaging;
 // These endpoints are also called by federated services in order to
 // send messages between prattle installations, too
 service Messaging {
-  // Subscribe is used to provide a stream to receive a user's messages
-  rpc Subscribe(google.protobuf.Empty) returns (stream MessageWrapper) {}
-
-  // PublicKey retrieves the public keys of a user, handling cases where a key
-  // lives on a third-party proxy instance
-  rpc PublicKey(auth.Auth) returns (stream self.PublicKeyValue) {}
-
   // Send accepts an encoded/ wrapped message and sends it to a user
   rpc Send(MessageWrapper) returns (google.protobuf.Empty) {}
+
+  // Subscribe is used to provide a stream to receive a user's messages
+  // User's must only call Subscribe on the prattle instance which owns/
+  // hosts their account.
+  //
+  // Server implementations must return an error if a user tries to subscribe
+  // to an account which is not on the domain it owns
+  rpc Subscribe(google.protobuf.Empty) returns (stream messaging.MessageWrapper) {}
 }
 
 // MessageWrappper wraps an encoded/ encrypted message to be forwarded to a recipient
@@ -46,10 +44,9 @@ service Messaging {
 // field in a decoded, decrypted 'Message' to ensure it matches the 'for' field when
 // the value of Message.Recipient is a group
 message MessageWrapper {
-  string recipient = 1;
-  string sender = 2;
+  Subject recipient = 1;
+  Subject sender = 2;
   bytes encoded = 3;
-  string for = 4;
 }
 
 // Message holds a minimum amount of metadata for a message, plus arbitrary body.
@@ -59,10 +56,30 @@ message MessageWrapper {
 // before being sent to a user
 message Message {
   // recipient in this context is used to determine whether a message was sent to a
-  // user directly, or to a group
+  // user directly, or to a group.
+  //
+  // Clients should compare the encoded recipient with the recipient details stored
+  // in the enclosing MessageWrapper to ensure no spoofing (or error) has occured in
+  // federated relaying
   string recipient = 1;
   string sender = 2;
   google.protobuf.Timestamp datetime = 3;
   bytes body = 4;
   string mimetype = 5;
+}
+
+// Subject holds the necessary data for a prattle instance to determine not only the
+// recipient of a message, but whether or not a sender can send a message to this recipient.
+//
+// Additionally, it forms the subject of a public key lookup.
+//
+// Specifically, in the case of sending to a group, it contains both the UserId of the
+// recipient, and the GroupId that this message is being sent on behalf of. See
+// messaging.Send for more information on why this is.
+//
+// Direct messages may ignore the field group_id - prattle implementations should ignore
+// this value (rather than error if set).
+message Subject {
+  string id = 1;
+  string group_id = 2;
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/alexedwards/argon2id"
 	"github.com/gofrs/uuid"
-	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	"github.com/pquerna/otp/totp"
 	"github.com/prattle-chat/prattle-proxy/server"
 	"github.com/sethvargo/go-diceware/diceware"
@@ -64,7 +62,7 @@ type Server struct {
 	server.UnimplementedAuthenticationServer
 	server.UnimplementedGroupsServer
 	server.UnimplementedMessagingServer
-	server.UnimplementedSelfServer
+	server.UnimplementedUserServer
 
 	redis  Redis
 	config *Configuration
@@ -138,17 +136,6 @@ func (s Server) validatePassword(user, password string) (valid bool, err error) 
 	return argon2id.ComparePasswordAndHash(password, hash)
 }
 
-func (s Server) userFromContext(ctx context.Context) (u User, err error) {
-	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
-	if err != nil {
-		err = authError
-
-		return
-	}
-
-	return s.redis.UserByToken(token)
-}
-
 func (s Server) isFederated(tok string) (string, bool) {
 	for d, f := range s.config.Federations {
 		if f.PSK == tok {
@@ -163,6 +150,42 @@ func (s Server) idFromToken(tok string) (string, error) {
 	return s.redis.UserIdByToken(tok)
 }
 
+// loadGroup loads either a local or a remote group, based on
+// the domain name of the groupID
+func (s Server) loadGroup(operatorID, groupID string) (g Group, err error) {
+	d, err := domain(groupID)
+	if err != nil {
+		return
+	}
+
+	if d == s.config.DomainName {
+		return s.redis.loadGroup(groupID)
+	}
+
+	f, ok := s.config.Federations[d]
+	if !ok {
+		err = notPeeredError
+
+		return
+	}
+
+	sg, err := f.GroupInfo(operatorID, &server.InfoRequest{
+		GroupId: groupID,
+	})
+
+	if err != nil {
+		return
+	}
+
+	g.Id = sg.Id
+	g.IsBroadcast = sg.IsBroadcast
+	g.IsOpen = sg.IsOpen
+	g.Owners = sg.Owners
+	g.Members = sg.Members
+
+	return
+}
+
 func contains(sl []string, s string) bool {
 	for _, elem := range sl {
 		if elem == s {
@@ -171,6 +194,22 @@ func contains(sl []string, s string) bool {
 	}
 
 	return false
+}
+
+func remove(sl []string, s string) (o []string) {
+	o = make([]string, 0)
+
+	// I don't know if we'll ever have a slice with the same
+	// element in it many times, but it's possible, so rather
+	// than find the index of the first instance of `s` and slicing
+	// around that, keep going until we've removed them all
+	for _, elem := range sl {
+		if elem != s {
+			o = append(o, elem)
+		}
+	}
+
+	return
 }
 
 func domain(s string) (d string, err error) {

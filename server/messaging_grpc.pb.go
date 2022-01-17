@@ -23,13 +23,15 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MessagingClient interface {
-	// Subscribe is used to provide a stream to receive a user's messages
-	Subscribe(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (Messaging_SubscribeClient, error)
-	// PublicKey retrieves the public keys of a user, handling cases where a key
-	// lives on a third-party proxy instance
-	PublicKey(ctx context.Context, in *Auth, opts ...grpc.CallOption) (Messaging_PublicKeyClient, error)
 	// Send accepts an encoded/ wrapped message and sends it to a user
 	Send(ctx context.Context, in *MessageWrapper, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// Subscribe is used to provide a stream to receive a user's messages
+	// User's must only call Subscribe on the prattle instance which owns/
+	// hosts their account.
+	//
+	// Server implementations must return an error if a user tries to subscribe
+	// to an account which is not on the domain it owns
+	Subscribe(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (Messaging_SubscribeClient, error)
 }
 
 type messagingClient struct {
@@ -38,6 +40,15 @@ type messagingClient struct {
 
 func NewMessagingClient(cc grpc.ClientConnInterface) MessagingClient {
 	return &messagingClient{cc}
+}
+
+func (c *messagingClient) Send(ctx context.Context, in *MessageWrapper, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/messaging.Messaging/Send", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *messagingClient) Subscribe(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (Messaging_SubscribeClient, error) {
@@ -72,58 +83,19 @@ func (x *messagingSubscribeClient) Recv() (*MessageWrapper, error) {
 	return m, nil
 }
 
-func (c *messagingClient) PublicKey(ctx context.Context, in *Auth, opts ...grpc.CallOption) (Messaging_PublicKeyClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Messaging_ServiceDesc.Streams[1], "/messaging.Messaging/PublicKey", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &messagingPublicKeyClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Messaging_PublicKeyClient interface {
-	Recv() (*PublicKeyValue, error)
-	grpc.ClientStream
-}
-
-type messagingPublicKeyClient struct {
-	grpc.ClientStream
-}
-
-func (x *messagingPublicKeyClient) Recv() (*PublicKeyValue, error) {
-	m := new(PublicKeyValue)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *messagingClient) Send(ctx context.Context, in *MessageWrapper, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/messaging.Messaging/Send", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // MessagingServer is the server API for Messaging service.
 // All implementations must embed UnimplementedMessagingServer
 // for forward compatibility
 type MessagingServer interface {
-	// Subscribe is used to provide a stream to receive a user's messages
-	Subscribe(*emptypb.Empty, Messaging_SubscribeServer) error
-	// PublicKey retrieves the public keys of a user, handling cases where a key
-	// lives on a third-party proxy instance
-	PublicKey(*Auth, Messaging_PublicKeyServer) error
 	// Send accepts an encoded/ wrapped message and sends it to a user
 	Send(context.Context, *MessageWrapper) (*emptypb.Empty, error)
+	// Subscribe is used to provide a stream to receive a user's messages
+	// User's must only call Subscribe on the prattle instance which owns/
+	// hosts their account.
+	//
+	// Server implementations must return an error if a user tries to subscribe
+	// to an account which is not on the domain it owns
+	Subscribe(*emptypb.Empty, Messaging_SubscribeServer) error
 	mustEmbedUnimplementedMessagingServer()
 }
 
@@ -131,14 +103,11 @@ type MessagingServer interface {
 type UnimplementedMessagingServer struct {
 }
 
-func (UnimplementedMessagingServer) Subscribe(*emptypb.Empty, Messaging_SubscribeServer) error {
-	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
-}
-func (UnimplementedMessagingServer) PublicKey(*Auth, Messaging_PublicKeyServer) error {
-	return status.Errorf(codes.Unimplemented, "method PublicKey not implemented")
-}
 func (UnimplementedMessagingServer) Send(context.Context, *MessageWrapper) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Send not implemented")
+}
+func (UnimplementedMessagingServer) Subscribe(*emptypb.Empty, Messaging_SubscribeServer) error {
+	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
 func (UnimplementedMessagingServer) mustEmbedUnimplementedMessagingServer() {}
 
@@ -151,6 +120,24 @@ type UnsafeMessagingServer interface {
 
 func RegisterMessagingServer(s grpc.ServiceRegistrar, srv MessagingServer) {
 	s.RegisterService(&Messaging_ServiceDesc, srv)
+}
+
+func _Messaging_Send_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MessageWrapper)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServer).Send(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/messaging.Messaging/Send",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServer).Send(ctx, req.(*MessageWrapper))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Messaging_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -174,45 +161,6 @@ func (x *messagingSubscribeServer) Send(m *MessageWrapper) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Messaging_PublicKey_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(Auth)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MessagingServer).PublicKey(m, &messagingPublicKeyServer{stream})
-}
-
-type Messaging_PublicKeyServer interface {
-	Send(*PublicKeyValue) error
-	grpc.ServerStream
-}
-
-type messagingPublicKeyServer struct {
-	grpc.ServerStream
-}
-
-func (x *messagingPublicKeyServer) Send(m *PublicKeyValue) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _Messaging_Send_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MessageWrapper)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MessagingServer).Send(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/messaging.Messaging/Send",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MessagingServer).Send(ctx, req.(*MessageWrapper))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // Messaging_ServiceDesc is the grpc.ServiceDesc for Messaging service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -229,11 +177,6 @@ var Messaging_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "Subscribe",
 			Handler:       _Messaging_Subscribe_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "PublicKey",
-			Handler:       _Messaging_PublicKey_Handler,
 			ServerStreams: true,
 		},
 	},

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"testing"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/prattle-chat/prattle-proxy/server"
@@ -27,8 +28,10 @@ var (
 				PSK:       "blahblahblah",
 				messaging: dummyMessagingClient{},
 				group:     dummyGroupsClient{},
+				user:      dummyUserClient{},
 			},
 		},
+		MaxKeys: 5,
 	}
 
 	lis       = bufconn.Listen(bufSize)
@@ -85,10 +88,6 @@ func (d dummyMessagingClient) Subscribe(context.Context, *emptypb.Empty, ...grpc
 	return &dummySC{0, dummyClientStream{}}, nil
 }
 
-func (d dummyMessagingClient) PublicKey(context.Context, *server.Auth, ...grpc.CallOption) (server.Messaging_PublicKeyClient, error) {
-	return &dummyPKC{0, dummyClientStream{}}, nil
-}
-
 func (d dummyMessagingClient) Send(context.Context, *server.MessageWrapper, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
@@ -99,23 +98,41 @@ func (dummyGroupsClient) Create(context.Context, *server.Group, ...grpc.CallOpti
 	return nil, nil
 }
 
-func (dummyGroupsClient) Join(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (dummyGroupsClient) Join(context.Context, *server.JoinRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
-func (dummyGroupsClient) Info(context.Context, *server.GroupUser, ...grpc.CallOption) (*server.Group, error) {
+func (dummyGroupsClient) Info(context.Context, *server.InfoRequest, ...grpc.CallOption) (*server.Group, error) {
 	return new(server.Group), nil
 }
-func (dummyGroupsClient) Invite(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (dummyGroupsClient) Invite(context.Context, *server.InviteRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
-func (dummyGroupsClient) PromoteUser(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (dummyGroupsClient) PromoteUser(context.Context, *server.PromoteRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
-func (dummyGroupsClient) DemoteUser(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (dummyGroupsClient) DemoteUser(context.Context, *server.DemoteRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
-func (dummyGroupsClient) Leave(context.Context, *server.GroupUser, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (dummyGroupsClient) Leave(context.Context, *server.LeaveRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
+}
+
+type dummyUserClient struct{}
+
+func (d dummyUserClient) AddPublicKey(context.Context, *server.PublicKeyValue, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+func (d dummyUserClient) DelPublicKey(context.Context, *server.PublicKeyValue, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+func (d dummyUserClient) Tokens(context.Context, *emptypb.Empty, ...grpc.CallOption) (server.User_TokensClient, error) {
+	return nil, nil
+}
+func (d dummyUserClient) DelToken(context.Context, *server.TokenValue, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+func (d dummyUserClient) PublicKey(context.Context, *server.PublicKeyRequest, ...grpc.CallOption) (server.User_PublicKeyClient, error) {
+	return &dummyPKC{0, dummyClientStream{}}, nil
 }
 
 type key string
@@ -133,7 +150,7 @@ func newTestServer(r Redis) (s Server) {
 		UnimplementedAuthenticationServer: server.UnimplementedAuthenticationServer{},
 		UnimplementedGroupsServer:         server.UnimplementedGroupsServer{},
 		UnimplementedMessagingServer:      server.UnimplementedMessagingServer{},
-		UnimplementedSelfServer:           server.UnimplementedSelfServer{},
+		UnimplementedUserServer:           server.UnimplementedUserServer{},
 		redis:                             r,
 		config:                            config,
 	}
@@ -150,7 +167,7 @@ func newTestServer(r Redis) (s Server) {
 	server.RegisterAuthenticationServer(grpcServer, s)
 	server.RegisterGroupsServer(grpcServer, s)
 	server.RegisterMessagingServer(grpcServer, s)
-	server.RegisterSelfServer(grpcServer, s)
+	server.RegisterUserServer(grpcServer, s)
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -159,4 +176,18 @@ func newTestServer(r Redis) (s Server) {
 	}()
 
 	return
+}
+
+func TestDefautMinter(t *testing.T) {
+	defer func() {
+		err := recover()
+		if err != nil {
+			t.Errorf("unexpected error\n%#v", err)
+		}
+	}()
+
+	_, err := minter("testing")
+	if err != nil {
+		t.Errorf("unexpected error\n%#v", err)
+	}
 }

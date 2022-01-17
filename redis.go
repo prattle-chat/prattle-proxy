@@ -112,26 +112,6 @@ func (r Redis) AddToken(id, token string) (err error) {
 	return
 }
 
-func (r Redis) AddPublicKey(id, pk string) (err error) {
-	u, err := r.loadUser(id)
-	if err != nil {
-		return
-	}
-
-	u.PublicKeys = append(u.PublicKeys, pk)
-
-	return r.saveUser(u)
-}
-
-func (r Redis) GetPublicKeys(id string) ([]string, error) {
-	u, err := r.loadUser(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return u.PublicKeys, nil
-}
-
 func (r Redis) MarkFinalised(id string) (err error) {
 	c := r.pool.Get()
 	defer c.Close()
@@ -162,8 +142,6 @@ func (r Redis) GetPasswordHash(id string) (s string, err error) {
 func (r Redis) IDExists(id string) bool {
 	u, err := r.loadUser(id)
 
-	log.Print(err)
-
 	// Treat errors the same as a key existing; it's better
 	// to force the client to retry at this point
 	if err != nil {
@@ -183,15 +161,6 @@ func (r Redis) UserIdByToken(token string) (id string, err error) {
 	}
 
 	return string(res.([]byte)), nil
-}
-
-func (r Redis) UserByToken(token string) (u User, err error) {
-	id, err := r.UserIdByToken(token)
-	if err != nil {
-		return
-	}
-
-	return r.loadUser(id)
 }
 
 func (r Redis) DeleteToken(token string) (err error) {
@@ -266,32 +235,6 @@ func (r Redis) JoinGroup(group, user string) (err error) {
 	}
 
 	g.Members = append(g.Members, user)
-
-	return r.saveGroup(g)
-}
-
-func (r Redis) PromoteUser(group, user string) (err error) {
-	g, err := r.loadGroup(group)
-	if err != nil {
-		return
-	}
-
-	g.Owners = append(g.Members, user)
-
-	return r.saveGroup(g)
-}
-
-func (r Redis) DemoteUser(group, user string) (err error) {
-	g, err := r.loadGroup(group)
-	if err != nil {
-		return
-	}
-
-	if !contains(g.Owners, user) {
-		g.Owners = removeElem(g.Owners, user)
-	} else {
-		g.Members = removeElem(g.Members, user)
-	}
 
 	return r.saveGroup(g)
 }

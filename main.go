@@ -40,7 +40,7 @@ func main() {
 		UnimplementedAuthenticationServer: server.UnimplementedAuthenticationServer{},
 		UnimplementedGroupsServer:         server.UnimplementedGroupsServer{},
 		UnimplementedMessagingServer:      server.UnimplementedMessagingServer{},
-		UnimplementedSelfServer:           server.UnimplementedSelfServer{},
+		UnimplementedUserServer:           server.UnimplementedUserServer{},
 		redis:                             redis,
 		config:                            config,
 	}
@@ -69,7 +69,7 @@ func main() {
 	server.RegisterAuthenticationServer(grpcServer, s)
 	server.RegisterGroupsServer(grpcServer, s)
 	server.RegisterMessagingServer(grpcServer, s)
-	server.RegisterSelfServer(grpcServer, s)
+	server.RegisterUserServer(grpcServer, s)
 
 	log.Printf("Starting server on %s", config.ListenAddr)
 
