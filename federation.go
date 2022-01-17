@@ -45,6 +45,7 @@ func (f *Federation) connect() (err error) {
 
 	f.messaging = server.NewMessagingClient(conn)
 	f.group = server.NewGroupsClient(conn)
+	f.user = server.NewUserClient(conn)
 
 	return
 }
