@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/alexedwards/argon2id"
 	"github.com/gofrs/uuid"
-	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	"github.com/pquerna/otp/totp"
 	"github.com/prattle-chat/prattle-proxy/server"
 	"github.com/sethvargo/go-diceware/diceware"
@@ -136,17 +134,6 @@ func (s Server) validatePassword(user, password string) (valid bool, err error) 
 	}
 
 	return argon2id.ComparePasswordAndHash(password, hash)
-}
-
-func (s Server) userFromContext(ctx context.Context) (u User, err error) {
-	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
-	if err != nil {
-		err = authError
-
-		return
-	}
-
-	return s.redis.UserByToken(token)
 }
 
 func (s Server) isFederated(tok string) (string, bool) {

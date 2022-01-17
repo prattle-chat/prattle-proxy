@@ -10,6 +10,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+type groupIdGetter interface {
+	GetGroupId() string
+}
+
 var (
 	operatorIDHeader = "operator_id"
 )
@@ -311,23 +315,8 @@ func (s Server) validateOperand(req interface{}, m *Metadata) (err error) {
 
 		recipient = v.Recipient.Id
 
-	case *server.JoinRequest:
-		recipient = v.GroupId
-
-	case *server.InfoRequest:
-		recipient = v.GroupId
-
-	case *server.LeaveRequest:
-		recipient = v.GroupId
-
-	case *server.InviteRequest:
-		recipient = v.GroupId
-
-	case *server.PromoteRequest:
-		recipient = v.GroupId
-
-	case *server.DemoteRequest:
-		recipient = v.GroupId
+	case groupIdGetter:
+		recipient = v.GetGroupId()
 
 	default:
 		return inputError

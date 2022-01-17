@@ -27,8 +27,10 @@ var (
 				PSK:       "blahblahblah",
 				messaging: dummyMessagingClient{},
 				group:     dummyGroupsClient{},
+				user:      dummyUserClient{},
 			},
 		},
+		MaxKeys: 5,
 	}
 
 	lis       = bufconn.Listen(bufSize)
@@ -85,10 +87,6 @@ func (d dummyMessagingClient) Subscribe(context.Context, *emptypb.Empty, ...grpc
 	return &dummySC{0, dummyClientStream{}}, nil
 }
 
-func (d dummyMessagingClient) PublicKey(context.Context, *server.Auth, ...grpc.CallOption) (server.User_PublicKeyClient, error) {
-	return &dummyPKC{0, dummyClientStream{}}, nil
-}
-
 func (d dummyMessagingClient) Send(context.Context, *server.MessageWrapper, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
 }
@@ -116,6 +114,24 @@ func (dummyGroupsClient) DemoteUser(context.Context, *server.DemoteRequest, ...g
 }
 func (dummyGroupsClient) Leave(context.Context, *server.LeaveRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
 	return nil, nil
+}
+
+type dummyUserClient struct{}
+
+func (d dummyUserClient) AddPublicKey(context.Context, *server.PublicKeyValue, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+func (d dummyUserClient) DelPublicKey(context.Context, *server.PublicKeyValue, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+func (d dummyUserClient) Tokens(context.Context, *emptypb.Empty, ...grpc.CallOption) (server.User_TokensClient, error) {
+	return nil, nil
+}
+func (d dummyUserClient) DelToken(context.Context, *server.TokenValue, ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil
+}
+func (d dummyUserClient) PublicKey(context.Context, *server.PublicKeyRequest, ...grpc.CallOption) (server.User_PublicKeyClient, error) {
+	return &dummyPKC{0, dummyClientStream{}}, nil
 }
 
 type key string

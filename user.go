@@ -8,14 +8,23 @@ import (
 )
 
 func (s Server) AddPublicKey(ctx context.Context, pkv *server.PublicKeyValue) (_ *emptypb.Empty, err error) {
-	u, err := s.userFromContext(ctx)
+	m := ctx.Value(MetadataKey{}).(*Metadata)
+	user := m.Operator
+
+	if !user.IsLocal {
+		err = badUserError
+
+		return
+	}
+
+	u, err := s.redis.loadUser(user.Id)
 	if err != nil {
 		return
 	}
 
 	u.PublicKeys = append(u.PublicKeys, pkv.Value)
-	if len(u.PublicKeys) >= s.config.MaxKeys {
-		u.PublicKeys = u.PublicKeys[len(u.PublicKeys)-s.config.MaxKeys : len(u.PublicKeys)]
+	if len(u.PublicKeys) > s.config.MaxKeys {
+		u.PublicKeys = u.PublicKeys[len(u.PublicKeys)-s.config.MaxKeys:]
 	}
 
 	err = s.redis.saveUser(u)

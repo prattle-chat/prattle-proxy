@@ -107,7 +107,13 @@ func TestServer_Invite(t *testing.T) {
 		group       string
 		mocks       func(*redigomock.Conn)
 		expectError bool
-	}{} {
+	}{
+		{"inviting to a group without being an owner fails", "foo", "some-user@testing", "g:closed@testing", closedGroup, true},
+		{"inviting a non-existent user to a group fails", "foo", "another-user@testing", "g:open@testing", groupInviteeNotExist, true},
+		{"inviting to a non-existent group fails", "foo", "some-user@testing", "g:closed@testing", missingGroup, true},
+		{"inviting to a group with permission succedes", "foo", "some-user@testing", "g:open@testing", validGroupWithMember, false},
+		{"external group", "foo", "some-user@testing", "g:group@none", validTokenAndUser, false},
+	} {
 		t.Run(test.name, func(t *testing.T) {
 			test.mocks(conn)
 
@@ -129,7 +135,88 @@ func TestServer_Invite(t *testing.T) {
 			if met != nil {
 				t.Errorf("redis expectations were not met\n%v", met)
 			}
+		})
+	}
+}
 
+func TestServer_PromoteUser(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		key         string
+		user        string
+		group       string
+		mocks       func(*redigomock.Conn)
+		expectError bool
+	}{
+		{"local group, caller has no permission", "foo", "some-user@testing", "g:open@testing", validGroup, true},
+		{"local group, caller not even a member", "foo", "some-user@testing", "g:open@testing", validGroupNotMember, true},
+		{"local group, caller is owner, promotee is not a member", "foo", "another@testing", "g:open@testing", validGroupWithMember, true},
+		{"local group, caller is owner, promotee is already owner", "foo", "some-user@testing", "g:open@testing", validGroupWithMember, false},
+		{"local group, caller is owner, promotee is just a member", "foo", "another@testing", "g:open@testing", validGroupAndMemberWithOwner, false},
+		{"external group calls federated client", "foo", "some-user@testing", "g:group@none", validTokenAndUser, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			test.mocks(conn)
+
+			newTestServer(NewDummyRedis(conn))
+
+			client := newTestGroupsClient()
+
+			_, err := client.PromoteUser(key(test.key).Auth(), &server.PromoteRequest{
+				Promotee: test.user,
+				GroupId:  test.group,
+			})
+			if test.expectError && err == nil {
+				t.Error("expected error")
+			} else if !test.expectError && err != nil {
+				t.Errorf("unexpected error %s", err)
+			}
+
+			met := conn.ExpectationsWereMet()
+			if met != nil {
+				t.Errorf("redis expectations were not met\n%v", met)
+			}
+		})
+	}
+}
+
+func TestServer_DemoteUser(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		key         string
+		user        string
+		group       string
+		mocks       func(*redigomock.Conn)
+		expectError bool
+	}{
+		{"local group, caller has no permission", "foo", "some-user@testing", "g:open@testing", validGroup, true},
+		{"local group, caller not even a member", "foo", "some-user@testing", "g:open@testing", validGroupNotMember, true},
+		{"local group, caller is owner, demotee is not a member", "foo", "another@testing", "g:open@testing", validGroupWithMember, true},
+		{"local group, caller is owner, demotee is owner", "foo", "some-user@testing", "g:open@testing", validGroupWithMemberDemote, false},
+		{"local group, caller is owner, demotee is just a member", "foo", "some-user@testing", "g:open@testing", validGroupWithMemberDemote, false},
+		{"external group calls federated client", "foo", "some-user@testing", "g:group@none", validTokenAndUser, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			test.mocks(conn)
+
+			newTestServer(NewDummyRedis(conn))
+
+			client := newTestGroupsClient()
+
+			_, err := client.DemoteUser(key(test.key).Auth(), &server.DemoteRequest{
+				Demotee: test.user,
+				GroupId: test.group,
+			})
+			if test.expectError && err == nil {
+				t.Error("expected error")
+			} else if !test.expectError && err != nil {
+				t.Errorf("unexpected error %s", err)
+			}
+
+			met := conn.ExpectationsWereMet()
+			if met != nil {
+				t.Errorf("redis expectations were not met\n%v", met)
+			}
 		})
 	}
 }
@@ -155,6 +242,44 @@ func TestServer_Info(t *testing.T) {
 			client := newTestGroupsClient()
 
 			_, err := client.Info(key(test.key).Auth(), &server.InfoRequest{
+				GroupId: test.group,
+			})
+			if test.expectError && err == nil {
+				t.Error("expected error")
+			} else if !test.expectError && err != nil {
+				t.Errorf("unexpected error %s", err)
+			}
+
+			met := conn.ExpectationsWereMet()
+			if met != nil {
+				t.Errorf("redis expectations were not met\n%v", met)
+			}
+
+		})
+	}
+}
+
+func TestServer_Leave(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		key         string
+		group       string
+		mocks       func(*redigomock.Conn)
+		expectError bool
+	}{
+		{"leaving a group without being a member fails", "foo", "g:closed@testing", closedGroup, true},
+		{"leaving a non-existant group fails", "foo", "g:closed@testing", missingGroup, true},
+		{"leaving a group with permission succedes", "foo", "g:open@testing", validGroupWithMemberDemote, false},
+		{"external group", "foo", "g:group@none", validTokenAndUser, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			test.mocks(conn)
+
+			newTestServer(NewDummyRedis(conn))
+
+			client := newTestGroupsClient()
+
+			_, err := client.Leave(key(test.key).Auth(), &server.LeaveRequest{
 				GroupId: test.group,
 			})
 			if test.expectError && err == nil {

@@ -37,6 +37,7 @@ func TestServer_FederatedEndpoints_SendMessage(t *testing.T) {
 		{"peered user, peered recipient", validPeeredToPeered, addOperatorHeader(key("blahblahblah").Auth(), "some-user@none"), &server.MessageWrapper{Recipient: &server.Subject{Id: "recipient@none"}, Sender: &server.Subject{Id: "some-user@none"}}, ""},
 		{"peered user tries to spoof sender", validPeeredToPeered, addOperatorHeader(key("blahblahblah").Auth(), "some-user@none"), &server.MessageWrapper{Recipient: &server.Subject{Id: "recipient@none"}, Sender: &server.Subject{Id: "admin@third-party"}}, "rpc error: code = InvalidArgument desc = mismatch between sender field and owner of token"},
 		{"peered user missing domain", validPeeredToPeered, addOperatorHeader(key("blahblahblah").Auth(), "admin"), &server.MessageWrapper{Recipient: &server.Subject{Id: "recipient@none"}, Sender: &server.Subject{Id: "admin"}}, "rpc error: code = Unavailable desc = missing/ poorly formed input"},
+		{"peered user, missing operator header", validPeeredToPeered, key("blahblahblah").Auth(), &server.MessageWrapper{Recipient: &server.Subject{Id: "some-user@testing"}, Sender: &server.Subject{Id: "some-user@none"}}, "rpc error: code = Unavailable desc = missing/ poorly formed input"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			test.mocks(conn)

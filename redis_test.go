@@ -325,6 +325,66 @@ func validGroupWithMember(conn *redigomock.Conn) {
 		})
 }
 
+func validGroupWithMemberDemote(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":      "g:open@testing",
+			"IsOpen":  "1",
+			"Members": `["some-user@testing"]`,
+			"Owners":  `["some-user@testing"]`,
+		})
+
+	conn.GenericCommand("HSET")
+}
+
+func validGroupNotMember(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":      "g:open@testing",
+			"IsOpen":  "1",
+			"Members": `["another-user@testing"]`,
+			"Owners":  `["another-user@testing"]`,
+		})
+}
+
+func validGroupNotOwner(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":      "g:open@testing",
+			"IsOpen":  "1",
+			"Members": `["another-user@testing"]`,
+			"Owners":  `["another-user@testing"]`,
+		})
+}
+
+func validGroupAndMemberWithOwner(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUser(conn)
+
+	conn.Command("HGETALL", "g:open@testing").
+		ExpectMap(map[string]string{
+			"Id":      "g:open@testing",
+			"IsOpen":  "1",
+			"Members": `["some-user@testing", "another@testing"]`,
+			"Owners":  `["some-user@testing"]`,
+		})
+
+	conn.GenericCommand("HSET")
+}
+
 func groupJoinOnErroringGroup(conn *redigomock.Conn) {
 	validGroup(conn)
 
@@ -353,14 +413,6 @@ func groupInviteeNotExist(conn *redigomock.Conn) {
 
 	validTokenAndUser(conn)
 
-	conn.Command("HGETALL", "g:open@testing").
-		ExpectMap(map[string]string{
-			"Id":      "g:open@testing",
-			"IsOpen":  "1",
-			"Members": `["some-user@testing"]`,
-			"Owners":  `["some-user@testing"]`,
-		})
-
 	conn.Command("HGETALL", "another-user@testing").
 		ExpectMap(map[string]string{})
 }
@@ -368,7 +420,7 @@ func groupInviteeNotExist(conn *redigomock.Conn) {
 func remoteUserAddSuccess(conn *redigomock.Conn) {
 	conn.Clear()
 
-	validPeeredToPeered(conn)
+	validTokenAndUser(conn)
 
 	conn.Command("HGETALL", "g:open@testing").
 		ExpectMap(map[string]string{
@@ -379,7 +431,22 @@ func remoteUserAddSuccess(conn *redigomock.Conn) {
 		})
 
 	conn.GenericCommand("HSET")
+}
 
+func addTokenSuccess(conn *redigomock.Conn) {
+	conn.Clear()
+
+	validTokenAndUserWithKeys(conn)
+
+	conn.Command("HSET", "some-user@testing",
+		"Id", "some-user@testing",
+		"Password", "",
+		"Seed", "",
+		"Finalised", true,
+		"Tokens", []byte("null\n"),
+		"Connections", []byte("null\n"),
+		"PublicKeys", []byte("[\"key-2\",\"key-3\",\"key-4\",\"key-5\",\"some-key\"]\n")).
+		Expect("ok")
 }
 
 func NewDummyRedis(c *redigomock.Conn) (r Redis) {

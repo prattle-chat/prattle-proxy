@@ -121,18 +121,26 @@ func (s Server) Info(ctx context.Context, in *server.InfoRequest) (out *server.G
 }
 
 // Invite is called by Group.Invite.
-//
-// In this, the values of GroupUser mean:
-//
-//  1. GroupID - The group we're inviting a user to
-//  2. UserID  - The user we're inviting to the specified group
-//  3. For     - The user who is doing the inviting
-//
-// Thus, Metadata.Sender.Id should be the same as 'For' on incoming calls from
-// peers, and should be set on calls *to* peers
 func (s Server) Invite(ctx context.Context, in *server.InviteRequest) (_ *emptypb.Empty, err error) {
 	m := ctx.Value(MetadataKey{}).(*Metadata)
 	group := m.Operand
+
+	// if invitee is local, check exists before doing anything else
+	d, err := domain(in.Invitee)
+	if err != nil {
+		return
+	}
+
+	if d == s.config.DomainName {
+		var u User
+
+		u, err = s.redis.loadUser(in.Invitee)
+		if err != nil || u.Id == "" {
+			err = badUserError
+
+			return
+		}
+	}
 
 	if group.IsLocal {
 		var g Group
@@ -167,19 +175,16 @@ func (s Server) PromoteUser(ctx context.Context, in *server.PromoteRequest) (_ *
 		}
 
 		switch {
-		case contains(g.Members, in.Promotee):
-			g.Owners = append(g.Owners, in.Promotee)
-
 		case contains(g.Owners, in.Promotee):
 			// noop
 
+		case contains(g.Members, in.Promotee):
+			g.Owners = append(g.Owners, in.Promotee)
+			err = s.redis.saveGroup(g)
+
 		default:
 			err = badUserError
-
-			return
 		}
-
-		err = s.redis.saveGroup(g)
 
 		return new(emptypb.Empty), err
 	}
@@ -201,11 +206,11 @@ func (s Server) DemoteUser(ctx context.Context, in *server.DemoteRequest) (_ *em
 		}
 
 		switch {
-		case contains(g.Members, in.Demotee):
-			g.Members = remove(g.Members, in.Demotee)
-
 		case contains(g.Owners, in.Demotee):
 			g.Owners = remove(g.Owners, in.Demotee)
+
+		case contains(g.Members, in.Demotee):
+			g.Members = remove(g.Members, in.Demotee)
 
 		default:
 			err = badUserError
@@ -222,20 +227,28 @@ func (s Server) DemoteUser(ctx context.Context, in *server.DemoteRequest) (_ *em
 	return new(emptypb.Empty), group.PeerConnection.DemoteUser(m.Operator.Id, in)
 }
 
-func (s Server) LeaveGroup(ctx context.Context, in *server.LeaveRequest) (out *emptypb.Empty, err error) {
+func (s Server) Leave(ctx context.Context, in *server.LeaveRequest) (out *emptypb.Empty, err error) {
 	m := ctx.Value(MetadataKey{}).(*Metadata)
 	group := m.Operand
 
 	out = new(emptypb.Empty)
 
 	if group.IsLocal {
-		// Can we join this group?
-		_, err = s.groupPermitted(in.GroupId, m.Operator.Id, groupLeave)
+		var g Group
+
+		// Can we leave this group?
+		g, err = s.groupPermitted(in.GroupId, m.Operator.Id, groupLeave)
 		if err != nil {
 			return
 		}
 
-		err = s.redis.JoinGroup(in.GroupId, m.Operator.Id)
+		if !contains(g.Owners, m.Operator.Id) && !contains(g.Members, m.Operator.Id) {
+			err = badGroupError
+
+			return
+		}
+
+		err = s.redis.RemoveFromGroup(in.GroupId, m.Operator.Id)
 		if err != nil {
 			err = inputError
 		}
@@ -251,6 +264,12 @@ func (s Server) LeaveGroup(ctx context.Context, in *server.LeaveRequest) (out *e
 func (s Server) groupPermitted(groupId, actorId string, op GroupOperation) (g Group, err error) {
 	g, err = s.redis.Group(groupId)
 	if err != nil {
+		err = badGroupError
+
+		return
+	}
+
+	if g.Id == "" {
 		err = badGroupError
 
 		return
