@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"testing"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/prattle-chat/prattle-proxy/server"
@@ -175,4 +176,18 @@ func newTestServer(r Redis) (s Server) {
 	}()
 
 	return
+}
+
+func TestDefautMinter(t *testing.T) {
+	defer func() {
+		err := recover()
+		if err != nil {
+			t.Errorf("unexpected error\n%#v", err)
+		}
+	}()
+
+	_, err := minter("testing")
+	if err != nil {
+		t.Errorf("unexpected error\n%#v", err)
+	}
 }

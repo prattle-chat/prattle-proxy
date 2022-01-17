@@ -110,6 +110,7 @@ func TestServer_Invite(t *testing.T) {
 	}{
 		{"inviting to a group without being an owner fails", "foo", "some-user@testing", "g:closed@testing", closedGroup, true},
 		{"inviting a non-existent user to a group fails", "foo", "another-user@testing", "g:open@testing", groupInviteeNotExist, true},
+		{"inviting an invalid user fails", "foo", "admin", "g:open@testing", validTokenAndUser, true},
 		{"inviting to a non-existent group fails", "foo", "some-user@testing", "g:closed@testing", missingGroup, true},
 		{"inviting to a group with permission succedes", "foo", "some-user@testing", "g:open@testing", validGroupWithMember, false},
 		{"external group", "foo", "some-user@testing", "g:group@none", validTokenAndUser, false},
