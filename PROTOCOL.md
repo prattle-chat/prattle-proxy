@@ -124,19 +124,63 @@ A server must not relay these messages; a client must connect to their home serv
 
 A [Message](https://github.com/prattle-chat/prattle-proxy/blob/main/protos/messaging.proto#L57-L69) is used to store a message, either when sent as a Direct Message (when a message is sent from one person to one person) or a Group message (when a message is sent from one person to many people).
 
-When a Message represents a Direct Message, the [recipient field](https://github.com/prattle-chat/prattle-proxy/blob/main/protos/messaging.proto#L64) must be the `user_id` associated with that user. When a Message represents a Group Message, the recipient field must be the `group_id` of that group.
-
 A Message must be encrypted and added to the 'encoded' field of a [MessageWrapper](https://github.com/prattle-chat/prattle-proxy/blob/main/protos/messaging.proto#L28-L50). For Direct Messages, a client may retrieve the recipient's keys each time, or it may cache keys for a time. For Group Messages, a client may retrieve the keys for every member of the group, or it make cache keys for a time.
-
-The Recipient field of a MessageWrapper must contain the `id` of the user for whom this message should be delivered. This `id` must match the owner of the PublicKey used to encrypt the message (since only that user has the private key necessary to decrypt a message).
-
-When a MessageWrapper wraps a Group Message, the client must set the `group_id` field of the Recipient to the ID of the Group the message is being sent to. The client must match this `group_id` with the `recipient` field of the Message, discarding any message where these do not match.
-
-Because messages to large groups (especially where users in groups have multiple PrivateKeys) result in a deluge of messages being sent by a Client, a Prattle server may limit the number of members a group has, and the number of keys a user has.
 
 MessageWrappers are sent to a user's Home Server on [messaging.Send](https://github.com/prattle-chat/prattle-proxy/blob/main/protos/messaging.proto#L16-L17). A server must relay Direct Messages to only to peered servers, and only to the peer whose domain matches the domain of the recipient. For Group Messages, the home server must relay via the peer whose domain matches the `group_id`. A server may locally deliver to group recipients if the domain of the recipient's ID matches the domain for the home server.
 
 A client must connect to its home server and call [messaging.Subscribe](https://github.com/prattle-chat/prattle-proxy/blob/main/protos/messaging.proto#L19-L25) to receive a stream of `MessageWrapper`s meant for this user.
+
+
+### Direct Messages
+
+A Direct Message looks like:
+
+```go
+func encrypt(msg *Message, key string) []byte { ... }
+
+key := getPublicKey("recipient@example.com")
+
+&MessageWrapper{
+    Recipient: &Subject{
+        Id: "recipient@example.com",
+    },
+    Sender: &Subject{
+        Id: "sender@example.com",
+    },
+    Encoded: encrypt(&Message{
+        Datetime: timestamppb.Now(),
+        Body: []string{"hello, world!"),
+        Mimetype: "text/plain",
+    }, key),
+}
+```
+
+A DirectMessage is one which is sent from one user to another. The `Encoded` field is encrypted with the recipient's public key. Where a recipient has multiple public keys, the message must be sent multiple times.
+
+### Group Messages
+
+```go
+func encrypt(msg *Message, key string) []byte { ... }
+
+key := getPublicKey("recipient@example.com")
+
+&MessageWrapper{
+    Recipient: &Subject{
+        Id: "recipient@example.com",
+        GroupId: "g:group@example.com",
+    },
+    Sender: &Subject{
+        Id: "sender@example.com",
+    },
+    Encoded: encrypt(&Message{
+        Datetime: timestamppb.Now(),
+        Body: []string{"hello, world!"),
+        Mimetype: "text/plain",
+    }, key),
+}
+```
+
+A Group Message is much the same as a DirectMessage, but with the addition of the field `MessageWrapper.Recipient.GroupId` which denotes the group the message was sent to. As with DirectMessage, the `Encoded` field is encrypted with the recipient's public key. Because a group contains multiple users, and because a user may have multiple public keys, the client must encrypt and send the same message to each user/key combinator.
 
 ## Groups
 
