@@ -33,4 +33,4 @@ $(CERTS): | $(CERTS_DIR)
 
 
 $(BINARY): $(GRPC_FILES) $(CERTS) *.go go.mod go.sum
-	CGO_ENABLED=0 go build -ldflags="-s -w" -buildmode=pie -trimpath -o $@
+	CGO_ENABLED=0 go build -ldflags="-s -w" -trimpath -o $@
